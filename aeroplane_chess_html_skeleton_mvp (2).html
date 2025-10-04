@@ -404,7 +404,7 @@
       return {captured};
     }
 
-    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos };
+    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith };
 
     // ------------ Dev Console Smoke Tests -------------
     (function devTests(){
@@ -527,14 +527,177 @@
     updateTurnUI(){ this.$.turn.textContent=`當前：${this.currentPlayer().name}`; },
 
     // --------- Game Flow ---------
-    rollDice(){ if(this.state.animating) return; const v=1+Math.floor(Math.random()*6); this.$.diceOut.textContent=v; this.state.dice=v; const st={turn:this.state.turn,players:this.state.players,pieces:this.state.pieces}; const rules=this.state.rules||window.GameRules.DEFAULT_RULES; this.state.legalMoves=window.GameRules.generateLegalMoves(st,rules,v); this.highlightMovables(); this.log(`${this.currentPlayer().name} 擲到 ${v}`); },
-    highlightMovables(){ const g=this.$.gHL; g.innerHTML=''; const moves=this.state.legalMoves||[]; const byPiece=new Map(); moves.forEach(m=>byPiece.set(m.pieceIndex,m)); const p=this.currentPlayer(); const pcs=this.state.pieces[p.id]; pcs.forEach((pc,idx)=>{ const where=this.posToXY(p.color,pc.pos); if(!where) return; const ring=document.createElementNS('http://www.w3.org/2000/svg','circle'); ring.setAttribute('cx',where.x); ring.setAttribute('cy',where.y); ring.setAttribute('r', byPiece.has(idx)?28:22); ring.setAttribute('fill', byPiece.has(idx)?'rgba(255,255,255,0.06)':'rgba(255,255,255,0.03)'); ring.setAttribute('stroke',byPiece.has(idx)?'white':'transparent'); ring.setAttribute('stroke-width',byPiece.has(idx)?'2':'0'); g.appendChild(ring); const txt=document.createElementNS('http://www.w3.org/2000/svg','text'); txt.setAttribute('x',where.x); txt.setAttribute('y',where.y+4); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','14'); txt.setAttribute('fill','#e5e7eb'); txt.textContent=String(idx+1); g.appendChild(txt); }); },
+    rollDice(){
+      if(this.state.animating) return;
+      const v=1+Math.floor(Math.random()*6);
+      this.$.diceOut.textContent=v;
+      this.state.dice=v;
+
+      const st={turn:this.state.turn,players:this.state.players,pieces:this.state.pieces};
+      const rules=this.state.rules||window.GameRules.DEFAULT_RULES;
+
+      this.state.legalMoves=window.GameRules.generateLegalMoves(st,rules,v);
+      this.highlightMovables();
+      this.log(`${this.currentPlayer().name} 擲到 ${v}`);
+
+      if((this.state.legalMoves||[]).length===0){
+        const me=this.currentPlayer();
+        const myPieces=this.state.pieces[me.id]||[];
+        const anyAtBase=myPieces.some(pc=>pc.pos.kind==='base');
+        if(anyAtBase && !window.GameRules.canTakeoffWith(v,rules)){
+          this.log('（提示）需要指定骰面先可以起飛');
+        }else{
+          this.log('（提示）本回合沒有合法步，直接交棒');
+        }
+
+        const again=(v===6 && rules.extraTurnOnSix);
+        if(again){
+          this.log('擲到 6：再擲一次');
+          this.state.dice=null;
+          this.$.diceOut.textContent='–';
+          this.state.legalMoves=[];
+          this.highlightMovables();
+          this.updateTurnUI();
+          this.maybeAutoPlayIfAI();
+        }else{
+          this.advanceTurn();
+        }
+        return;
+      }
+
+      if(this.isAI(this.currentPlayer())) this.maybeAutoPlayIfAI();
+    },
+    highlightMovables(){
+      const g=this.$.gHL; g.innerHTML='';
+      const host=this.$.movables; host.innerHTML='';
+      const player=this.currentPlayer(); if(!player) return;
+
+      const moves=this.state.legalMoves||[];
+      const byPiece=new Map();
+      moves.forEach(m=>{
+        if(!byPiece.has(m.pieceIndex)) byPiece.set(m.pieceIndex,[]);
+        byPiece.get(m.pieceIndex).push(m);
+      });
+
+      const pcs=this.state.pieces[player.id]||[];
+      pcs.forEach((pc,idx)=>{
+        const where=this.posToXY(player.color,pc.pos);
+        if(!where) return;
+        const hasMove=byPiece.has(idx);
+        const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        ring.setAttribute('cx',where.x);
+        ring.setAttribute('cy',where.y);
+        ring.setAttribute('r',hasMove?28:22);
+        ring.setAttribute('fill',hasMove?'rgba(34,211,238,0.12)':'rgba(255,255,255,0.03)');
+        ring.setAttribute('stroke',hasMove?'var(--accent)':'transparent');
+        ring.setAttribute('stroke-width',hasMove?'2':'0');
+        if(hasMove){
+          ring.style.cursor='pointer';
+          ring.addEventListener('click',()=>{
+            const options=byPiece.get(idx);
+            if(options?.length) this.applyMove(options[0]);
+          });
+        }
+        g.appendChild(ring);
+
+        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x',where.x);
+        txt.setAttribute('y',where.y+4);
+        txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('font-size','14');
+        txt.setAttribute('fill','#e5e7eb');
+        txt.textContent=String(idx+1);
+        g.appendChild(txt);
+
+        if(hasMove){
+          const movesForPiece=byPiece.get(idx);
+          const btn=document.createElement('button');
+          btn.type='button';
+          btn.className='btn';
+          const labels=new Set(movesForPiece.map(m=>m.kind==='takeoff'?'起飛':'前進'));
+          btn.textContent=`${idx+1} 號棋：${Array.from(labels).join(' / ')}`;
+          btn.addEventListener('click',()=>{ if(movesForPiece.length) this.applyMove(movesForPiece[0]); });
+          host.appendChild(btn);
+        }
+      });
+
+      if(host.childElementCount===0){
+        const span=document.createElement('span');
+        span.className='muted';
+        span.textContent='沒有可移動棋子';
+        host.appendChild(span);
+      }
+    },
     posToXY(color,pos){ if(pos.kind==='track') return this.geom.track[pos.idx]; if(pos.kind==='home') return this.geom.home[color][pos.idx]; if(pos.kind==='base'){ const slots=this.geom.bases[color]; return slots[0]; } return null; },
     redrawPieces(){ const g=this.$.gPieces; g.innerHTML=''; g.onclick=(e)=>{ if(this.state.animating) return; const t=e.target.closest('circle'); if(!t) return; const pid=t.dataset.player; const idx=parseInt(t.dataset.index,10); if(pid!==this.state.turn||Number.isNaN(idx)) return; const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===idx); if(mv) this.applyMove(mv); };
       for(const p of this.state.players){ const pcs=this.state.pieces[p.id]; pcs.forEach((pc,idx)=>{ const xy=this.posToXY(p.color,pc.pos); if(!xy) return; const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xy.x); c.setAttribute('cy',xy.y); c.setAttribute('r',18); c.setAttribute('fill',`var(--${p.color})`); c.setAttribute('stroke','#0b0f14'); c.setAttribute('stroke-width','3'); c.dataset.player=p.id; c.dataset.index=idx; this.$.gPieces.appendChild(c); const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',xy.x); t.setAttribute('y',xy.y+4); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.setAttribute('fill','#0b0f14'); t.textContent=String(idx+1); this.$.gPieces.appendChild(t); }); }
     },
 
-    applyMove(move){ this.pushHistory(); const pid=this.state.turn; const player=this.currentPlayer(); const piece=this.state.pieces[pid][move.pieceIndex]; const fromXY=this.posToXY(player.color,piece.pos); const toXY=this.posToXY(player.color,move.to)||fromXY; this.state.animating=true; this.animatePiece(player,fromXY,toXY,520).then(async()=>{ const capturedInfos=[]; if(move.capture && move.capture.captured && move.to.kind==='track'){ for(const opp of this.state.players){ if(opp.id===pid) continue; this.state.pieces[opp.id].forEach((pc,idx)=>{ if(pc.pos.kind==='track' && pc.pos.idx===move.to.idx){ capturedInfos.push({opp, pieceIndex:idx}); } }); } } for(const info of capturedInfos){ const from=this.geom.track[move.to.idx]; const baseSlot=this.geom.bases[info.opp.color][0]; await this.animatePiece({color:info.opp.color}, from, baseSlot, 420);} piece.pos=move.to; if(capturedInfos.length>0){ for(const info of capturedInfos){ this.state.pieces[info.opp.id][info.pieceIndex].pos=window.GameRules.Pos.base(); } this.log(`${player.name} 吃子！把對手送回基地`); } if(move.events){ move.events.forEach(ev=>{ if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules.ownColorJump.steps})`); if(ev.type==='flight') this.log(`${player.name} 走飛線`); if(ev.type==='finish') this.log(`${player.name} 抵達終點！`); }); } this.redrawPieces(); this.$.gHL.innerHTML=''; this.pulseAt(toXY.x,toXY.y,`var(--${player.color})`); if(move.to.kind==='track'){ const faces=this.computeThreatFaces(move.to.idx); this.showThreatBadge(toXY.x,toXY.y,faces); } const again=(this.state.dice===6 && this.state.rules.extraTurnOnSix); this.state.animating=false; if(!again) this.advanceTurn(); else { this.updateTurnUI(); this.maybeAutoPlayIfAI(); } }); },
+    applyMove(move){
+      this.pushHistory();
+      const pid=this.state.turn;
+      const player=this.currentPlayer();
+      const piece=this.state.pieces[pid][move.pieceIndex];
+      const fromXY=this.posToXY(player.color,piece.pos);
+      const toXY=this.posToXY(player.color,move.to)||fromXY;
+      this.state.animating=true;
+      this.animatePiece(player,fromXY,toXY,520).then(async()=>{
+        const capturedInfos=[];
+        if(move.capture && move.capture.captured && move.to.kind==='track'){
+          for(const opp of this.state.players){
+            if(opp.id===pid) continue;
+            this.state.pieces[opp.id].forEach((pc,idx)=>{
+              if(pc.pos.kind==='track' && pc.pos.idx===move.to.idx){
+                capturedInfos.push({opp,pieceIndex:idx});
+              }
+            });
+          }
+        }
+
+        for(const info of capturedInfos){
+          const from=this.geom.track[move.to.idx];
+          const baseSlot=this.geom.bases[info.opp.color][0];
+          await this.animatePiece({color:info.opp.color}, from, baseSlot, 420);
+        }
+
+        piece.pos=move.to;
+
+        if(capturedInfos.length>0){
+          for(const info of capturedInfos){
+            this.state.pieces[info.opp.id][info.pieceIndex].pos=window.GameRules.Pos.base();
+          }
+          this.log(`${player.name} 吃子！把對手送回基地`);
+        }
+
+        if(move.events){
+          move.events.forEach(ev=>{
+            if(ev.type==='enter-home') this.log(`${player.name} 進入家路`);
+            if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules.ownColorJump.steps})`);
+            if(ev.type==='flight') this.log(`${player.name} 走飛線`);
+            if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
+          });
+        }
+
+        this.redrawPieces();
+        this.$.gHL.innerHTML='';
+        this.pulseAt(toXY.x,toXY.y,`var(--${player.color})`);
+        if(move.to.kind==='track'){
+          const faces=this.computeThreatFaces(move.to.idx);
+          this.showThreatBadge(toXY.x,toXY.y,faces);
+        }else{
+          this.showThreatBadge(toXY.x,toXY.y,[]);
+        }
+
+        const again=(this.state.dice===6 && this.state.rules.extraTurnOnSix);
+        this.state.animating=false;
+        if(!again){
+          this.advanceTurn();
+        }else{
+          this.updateTurnUI();
+          this.maybeAutoPlayIfAI();
+        }
+      });
+    },
     advanceTurn(){ const i=this.state.players.findIndex(p=>p.id===this.state.turn); const next=(i+1)%this.state.players.length; this.state.turn=this.state.players[next].id; this.state.dice=null; this.$.diceOut.textContent='–'; this.updateTurnUI(); this.saveGame(); this.maybeAutoPlayIfAI(); },
     onKey(e){ if(this.state.view!=='game' || this.state.animating) return; const mode=this.state.settings.keyboardMode; const pIdx=this.state.players.findIndex(p=>p.id===this.state.turn); if(e.code==='Space'){ e.preventDefault(); this.rollDice(); return; } if(e.key==='u'||e.key==='U'){ this.undo(); return; } let selIndex=null; if(mode==='shared'){ if(['1','2','3','4'].includes(e.key)) selIndex=parseInt(e.key,10)-1; } else if(mode==='dual'&&this.state.players.length>=2){ if(pIdx===0 && ['1','2','3','4'].includes(e.key)) selIndex=parseInt(e.key,10)-1; if(pIdx===1 && ['7','8','9','0'].includes(e.key)) selIndex=(e.key==='0'?3:parseInt(e.key,10)-7); } if(selIndex!=null){ const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex); if(mv) this.applyMove(mv); } },
 
@@ -553,7 +716,30 @@
       const scored=moves.map(m=>{ const beforePos=this.state.pieces[player.id][m.pieceIndex].pos; const before=distToFinish(player.color,beforePos); const after=distToFinish(player.color,m.to); let score=(before-after)*4; const cap=(m.capture&&(m.capture.captured||[]).length)||0; score+=cap*1000; if(m.to.kind==='finished') score+=900; if((m.events||[]).some(e=>e.type==='enter-home')) score+=400; if((m.events||[]).some(e=>e.type==='jump')) score+=140; if((m.events||[]).some(e=>e.type==='flight')) score+=90; if(m.kind==='takeoff') score+=80; if(m.to.kind==='track' && isSafeTile(player.color,m.to.idx)) score+=60; if(m.to.kind==='track'){ const prob=captureRiskProb(player.color,m.to.idx); score-=prob*700; } return {move:m,score,before,after}; });
       scored.sort((a,b)=> b.score!==a.score? b.score-a.score : ((a.before-a.after)!==(b.before-b.after)? (b.before-b.after)-(a.before-a.after) : (((b.move.capture?.captured||[]).length)-((a.move.capture?.captured||[]).length))));
       return scored[0].move; },
-    maybeAutoPlayIfAI(){ const p=this.currentPlayer(); if(!this.isAI(p)) return; setTimeout(()=>{ if(this.state.animating) return this.maybeAutoPlayIfAI(); this.rollDice(); setTimeout(()=>{ const mv=this.chooseAIMove(); if(mv) this.applyMove(mv); else { this.log(`${p.name} 無步可走`); this.advanceTurn(); } },350); },300); },
+    maybeAutoPlayIfAI(){
+      const player=this.currentPlayer();
+      if(!this.isAI(player)) return;
+      setTimeout(()=>{
+        if(this.state.animating) return this.maybeAutoPlayIfAI();
+        const current=this.currentPlayer();
+        if(!this.isAI(current)) return;
+        if(current.id!==player.id){
+          this.maybeAutoPlayIfAI();
+          return;
+        }
+        if(this.state.dice==null){
+          this.rollDice();
+          return;
+        }
+        const mv=this.chooseAIMove();
+        if(mv){
+          this.applyMove(mv);
+        }else{
+          this.log(`${current.name} 無步可走`);
+          this.advanceTurn();
+        }
+      },300);
+    },
 
     // --------- Anim / Effects ---------
     animatePiece(player,from,to,duration=480){ return new Promise(resolve=>{ const g=this.$.gHL; const NS='http://www.w3.org/2000/svg'; const ghost=document.createElementNS(NS,'circle'); ghost.setAttribute('cx',from.x); ghost.setAttribute('cy',from.y); ghost.setAttribute('r',18); ghost.setAttribute('fill',`var(--${player.color})`); ghost.setAttribute('stroke','#0b0f14'); ghost.setAttribute('stroke-width','3'); g.appendChild(ghost); const t0=performance.now(); const ease=t=>1-Math.pow(1-t,3); const step=(now)=>{ const p=Math.min(1,(now-t0)/duration), e=ease(p); const x=from.x+(to.x-from.x)*e, y=from.y+(to.y-from.y)*e; ghost.setAttribute('cx',x); ghost.setAttribute('cy',y); if(p<1) requestAnimationFrame(step); else { g.removeChild(ghost); resolve(); } }; requestAnimationFrame(step); }); },
