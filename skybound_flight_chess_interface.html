@@ -38,6 +38,19 @@
     label{display:flex;align-items:center;gap:8px}
     .row{display:flex;gap:8px;flex-wrap:wrap}
     input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
+    #turn-banner{position:sticky;top:16px;z-index:20;display:block;padding:10px 18px;border-radius:999px;background:rgba(34,211,238,0.16);color:#0f172a;font-weight:600;border:1px solid rgba(34,211,238,0.35);box-shadow:0 8px 18px rgba(15,23,42,0.35);max-width:fit-content;margin:0 auto 12px auto;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .22s ease}
+    #turn-banner[data-show="true"]{opacity:1;transform:translateY(0)}
+    #hint-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(15,23,42,0.68);border:1px solid #1f2937;display:flex;flex-direction:column;gap:8px}
+    #hint-card h3{margin:0;font-size:.95rem;font-weight:600;color:#f1f5f9}
+    #hint-card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:#cbd5f5;font-size:.9rem}
+    #hint-card .hint-meta{font-size:.8rem;color:var(--muted)}
+    #toast-host{pointer-events:none;min-height:26px}
+    .toast-message{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;margin-top:6px;border-radius:999px;background:rgba(34,211,238,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 14px rgba(8,47,73,0.3);opacity:0;transform:translateY(-4px);transition:opacity .18s ease,transform .22s ease}
+    .toast-message[data-show="true"]{opacity:1;transform:translateY(0)}
+    @media(prefers-reduced-motion:reduce){
+      #turn-banner{transition:opacity .1s ease;transform:none}
+      .toast-message{transition:opacity .1s ease;transform:none}
+    }
   </style>
 </head>
 <body>
@@ -54,6 +67,7 @@
   </header>
 
   <main class="container" id="app" role="main">
+    <div id="turn-banner" role="status" aria-live="assertive" hidden></div>
     <!-- 1) Lobby / Setup -->
     <section id="view-lobby" class="grid" aria-labelledby="title-lobby">
       <h1 id="title-lobby" class="section-title">大廳／開局設定</h1>
@@ -175,6 +189,8 @@
           <button class="btn" id="btn-roll" aria-live="assertive" aria-label="擲骰">擲骰 🎲</button>
           <output id="dice-output" aria-live="polite" class="pill">–</output>
         </div>
+        <div id="toast-host" aria-live="polite"></div>
+        <div id="hint-card" aria-live="polite"></div>
         <div style="margin-top:12px">
           <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
           <div id="movables" class="list" aria-live="polite"></div>
@@ -514,19 +530,20 @@
     });
   })();
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0 },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0 },
     geom:{ track:[], home:{}, bases:{} },
     init(){
       if(this._initialized) return;
       this._initialized=true;
       this.cache(); this.bind(); this.renderLobbyPlayers(2);
       if(localStorage.getItem('ac_save_v1')) this.$.btnContinue.disabled=false;
+      this.autoLaunch();
     },
     cache(){
       this.$={
         viewLobby:$('#view-lobby'), viewGame:$('#view-game'), playerCount:$('#playerCount'), playerList:$('#player-list'),
         formSetup:$('#form-setup'), btnQuick:$('#btn-quick'), btnStart:$('#btn-start'), btnLobby:$('#btn-lobby'), btnRoll:$('#btn-roll'),
-        diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'),
+        diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'), hintCard:$('#hint-card'), turnBanner:$('#turn-banner'), toast:$('#toast-host'),
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights')
       };
@@ -540,15 +557,156 @@
       this.$.btnQuick.addEventListener('click',()=>{ this.applyPreset('classic'); this.startGame(); });
       this.$.btnContinue.addEventListener('click',()=>this.continueFromSave());
       this.$.btnLobby.addEventListener('click',()=>this.toLobby());
-      this.$.btnRoll.addEventListener('click',()=>this.rollDice());
+      this.$.btnRoll.addEventListener('click',()=>this.rollDice('mouse'));
       this.$.btnUndo.addEventListener('click',()=>this.undo());
       this.$.btnRestart.addEventListener('click',()=>this.restartGame());
       $('#btn-settings').addEventListener('click',()=>$('#dialog-settings').showModal());
       $('#btn-about').addEventListener('click',()=>$('#dialog-about').showModal());
-      this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); });
+      this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); this.updateControlAssignments(); this.renderHints(); this.updateTurnPrompt(true); });
       document.addEventListener('keydown',e=>this.onKey(e));
     },
+    lockInput(ms=0){
+      if(this._inputUnlockTimer){ clearTimeout(this._inputUnlockTimer); this._inputUnlockTimer=null; }
+      if(!(ms>0)){ this.state.inputLockUntil=0; return; }
+      this.state.inputLockUntil=Date.now()+ms;
+      this._inputUnlockTimer=setTimeout(()=>{ this.state.inputLockUntil=0; this._inputUnlockTimer=null; },ms);
+    },
+    isInputLocked(){ return Date.now()< (this.state.inputLockUntil||0); },
+    showToast(message,duration=1600){
+      const host=this.$?.toast; if(!host) return;
+      if(!this._toast){ this._toast=document.createElement('div'); this._toast.className='toast-message'; host.appendChild(this._toast); }
+      if(this._toastTimer){ clearTimeout(this._toastTimer); this._toastTimer=null; }
+      if(!message){ this._toast.dataset.show='false'; this._toastTimer=setTimeout(()=>{ if(this._toast) this._toast.dataset.show='false'; },0); return; }
+      this._toast.textContent=message;
+      this._toast.dataset.show='true';
+      this._toastTimer=setTimeout(()=>{ if(this._toast) this._toast.dataset.show='false'; },duration);
+    },
+    updateControlAssignments(){
+      const mode=this.state.settings.keyboardMode||'shared';
+      const map={};
+      this.state.players.forEach((player,idx)=>{
+        if(mode==='shared'){ map[player.id]='keyboard'; }
+        else if(mode==='dual'){ map[player.id]=(idx<=1?'keyboard':'mouse'); }
+        else { map[player.id]='mouse'; }
+      });
+      this.state.controlById=map;
+    },
     currentPlayer(){ return this.state.players.find(p=>p.id===this.state.turn)||null; },
+    currentControlModeForTurn(){
+      const player=this.currentPlayer();
+      if(!player) return 'mouse';
+      const mode=this.state.controlById?.[player.id];
+      return mode||'mouse';
+    },
+    isInteractionPermitted(source){
+      if(source==='system') return true;
+      if(this.isInputLocked()){ return false; }
+      const control=this.currentControlModeForTurn();
+      if(control==='keyboard' && source==='mouse') return false;
+      if(control==='mouse' && source==='keyboard') return false;
+      return true;
+    },
+    handleBlockedInteraction(source){
+      const player=this.currentPlayer();
+      if(this.isInputLocked()){ this.showToast('請稍候，提示顯示中…',900); return; }
+      if(!player) return;
+      const control=this.currentControlModeForTurn();
+      if(control==='keyboard' && source==='mouse') this.showToast(`${player.name} 回合需用鍵盤操作`,1400);
+      else if(control==='mouse' && source==='keyboard') this.showToast(`${player.name} 回合請用滑鼠`,1400);
+    },
+    renderHints(){
+      const host=this.$?.hintCard; if(!host) return;
+      const player=this.currentPlayer();
+      host.innerHTML='';
+      if(!player){
+        host.innerHTML='<p class="hint-meta">等待遊戲開始…</p>';
+        return;
+      }
+      const control=this.currentControlModeForTurn();
+      const stage=(this.state.dice==null)?'roll':'move';
+      const list=document.createElement('ul');
+      const title=document.createElement('h3');
+      title.textContent=`${player.name} 的操作提示`;
+      const hints=[];
+      const moveCount=Array.isArray(this.state.legalMoves)?this.state.legalMoves.length:0;
+      const mode=this.state.settings.keyboardMode||'shared';
+      const playerIndex=this.state.players.findIndex(p=>p.id===player.id);
+      if(control==='keyboard'){
+        if(stage==='roll') hints.push('按 Space 擲骰 🎲');
+        if(mode==='shared'){ hints.push('用 1–4 選棋'); }
+        else if(mode==='dual'){
+          if(playerIndex===0) hints.push('P1：用 1–4 選棋');
+          else if(playerIndex===1) hints.push('P2：用 7–0 選棋');
+          else hints.push('此玩家以滑鼠操作');
+        }
+        if(stage==='move'){
+          if(moveCount>0) hints.push('選擇數字鍵執行移動');
+          else hints.push('沒有可移動棋子，等待換手');
+        }
+        if(this.state.rules?.undoEnabled) hints.push('按 U 撤銷 (Undo)');
+      }else{
+        if(stage==='roll') hints.push('點擊「擲骰 🎲」開始');
+        if(stage==='move'){
+          if(moveCount>0) hints.push('點擊棋子或右側按鈕移動');
+          else hints.push('目前沒有可行動的棋子');
+        }
+        if(this.state.rules?.undoEnabled) hints.push('如需撤銷，可點 Undo 按鈕');
+      }
+      hints.forEach(text=>{ const li=document.createElement('li'); li.textContent=text; list.appendChild(li); });
+      const meta=document.createElement('div');
+      meta.className='hint-meta';
+      meta.textContent=control==='keyboard'?'此回合鎖定鍵盤操作':'此回合鎖定滑鼠操作';
+      host.appendChild(title);
+      host.appendChild(list);
+      host.appendChild(meta);
+    },
+    buildTurnPrompt(){
+      const player=this.currentPlayer();
+      if(!player) return '';
+      const control=this.currentControlModeForTurn();
+      const stage=(this.state.dice==null)?'roll':'move';
+      let action='準備中';
+      if(stage==='roll') action = control==='keyboard' ? '按 Space 擲骰 🎲' : '點擊 🎲 擲骰';
+      else if(stage==='move') action = control==='keyboard' ? '用數字鍵選棋' : '點擊棋子行動';
+      else action='等待下一步';
+      return `${player.name} 的回合 — ${action}`;
+    },
+    showTurnPrompt(message,{duration=2200,force=false,lock=0}={}){
+      const host=this.$?.turnBanner; if(!host) return;
+      if(!message){ host.dataset.show='false'; host.setAttribute('hidden',''); this._currentPrompt=''; return; }
+      if(!force && this._currentPrompt===message) return;
+      this._currentPrompt=message;
+      host.textContent=message;
+      host.dataset.show='true';
+      host.removeAttribute('hidden');
+      if(this._turnBannerTimer){ clearTimeout(this._turnBannerTimer); }
+      this._turnBannerTimer=setTimeout(()=>{
+        host.dataset.show='false';
+        this._turnBannerTimer=setTimeout(()=>{ host.setAttribute('hidden',''); },220);
+      },duration);
+      if(lock>0) this.lockInput(lock);
+    },
+    updateTurnPrompt(force=false){
+      const msg=this.buildTurnPrompt();
+      const stage=(this.state.dice==null)?'roll':'move';
+      const lock=force && stage==='roll'?320:0;
+      if(msg) this.showTurnPrompt(msg,{force,duration:2200,lock});
+      else this.showTurnPrompt('',{force:true});
+    },
+    autoLaunch(){
+      if(this._autoLaunched) return;
+      this._autoLaunched=true;
+      requestAnimationFrame(()=>{
+        const saved=this.loadGame();
+        if(saved){
+          this._pendingToast='已載入上局，繼續作戰！';
+          this.continueFromSave(saved);
+        }else{
+          this._pendingToast='已快速開始經典對局';
+          this.startGame();
+        }
+      });
+    },
     log(message){
       const host=this.$?.log; if(!host) return;
       const entry=document.createElement('div');
@@ -592,7 +750,7 @@
       if(!player) return;
       this.log(`${player.name} 超時！`);
       if(this.state.dice==null){
-        this.rollDice();
+        this.rollDice('system');
       }else{
         this.log('回合已自動結束');
         this.advanceTurn();
@@ -608,6 +766,17 @@
       }
       this.highlightMovables();
     },
+    handleNoMoves(player){
+      this.clearTurnTimer();
+      const name=player?.name||'該玩家';
+      this.showTurnPrompt(`${name} 無步可走`,{duration:1600,force:true,lock:400});
+      this.renderHints();
+      if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); }
+      this._noMoveTimer=setTimeout(()=>{
+        this._noMoveTimer=null;
+        this.advanceTurn();
+      },1200);
+    },
     updateTurnUI(){
       const player=this.currentPlayer();
       this.$.turn.textContent=player?`當前：${player.name}`:'當前：—';
@@ -619,6 +788,8 @@
         this.beginTurnTimer();
       }
       this.refreshLegalMoves();
+      this.renderHints();
+      this.updateTurnPrompt();
     },
     renderLobbyPlayers(n){
       const host=this.$.playerList; host.innerHTML='';
@@ -672,6 +843,7 @@
       if(players.length<2){ this.log('至少需要 2 位玩家'); return; }
       this.state.players=players; this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       this.state.consecutiveSixes={};
+      this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
       if(preset==='custom'){ this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES, this.readRulesFromForm()); }
       else { this.applyPreset(preset); }
@@ -687,7 +859,11 @@
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
       this.clearTurnTimer();
-      this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.saveGame(); this.log('遊戲開始！'); this.maybeAutoPlayIfAI();
+      this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.updateTurnPrompt(true); this.saveGame(); this.log('遊戲開始！');
+      const toastMsg=this._pendingToast||'新局開始，祝你順風！';
+      if(toastMsg) this.showToast(toastMsg);
+      this._pendingToast=null;
+      this.maybeAutoPlayIfAI();
       this.$.btnContinue.disabled=false;
     },
     toGame(){ this.$.viewLobby.hidden=true; this.$.viewGame.hidden=false; this.state.view='game'; },
@@ -698,6 +874,7 @@
         this.log('未有進行中的對局');
         return;
       }
+      this.updateControlAssignments();
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       this.state.pieces={};
       this.state.consecutiveSixes={};
@@ -720,14 +897,19 @@
       this.bootstrapBoard();
       this.redrawPieces();
       this.updateTurnUI();
+      this.updateTurnPrompt(true);
       this.saveGame();
       this.log('已重開新局');
+      const toastMsg=this._pendingToast||'新局已重置';
+      if(toastMsg) this.showToast(toastMsg);
+      this._pendingToast=null;
       this.maybeAutoPlayIfAI();
       this.$.btnContinue.disabled=false;
     },
 
-    rollDice(){
+    rollDice(source='system'){
       if(this.state.view!=='game'){ return; }
+      if(!this.isInteractionPermitted(source)){ this.handleBlockedInteraction(source); return; }
       if(this.state.animating){ this.log('動畫進行中，稍候再擲'); return; }
       if(this.state.dice!=null){ this.log('本回合已擲骰'); return; }
       const player=this.currentPlayer();
@@ -748,19 +930,24 @@
         this.$.diceOut.textContent='–';
         this.state.legalMoves=[];
         this.highlightMovables();
+        this.renderHints();
         this.clearTurnTimer();
+        this.updateTurnPrompt(true);
         this.advanceTurn();
         return;
       }
       this.refreshLegalMoves();
+      this.renderHints();
       this.saveGame();
-      this.clearTurnTimer();
-      this.beginTurnTimer();
-      if((this.state.legalMoves||[]).length===0){
+      const moveCount=(this.state.legalMoves||[]).length;
+      if(moveCount===0){
         this.log(`${player.name} 無步可走`);
-        this.advanceTurn();
+        this.handleNoMoves(player);
         return;
       }
+      this.clearTurnTimer();
+      this.beginTurnTimer();
+      this.updateTurnPrompt(true);
       this.maybeAutoPlayIfAI();
     },
 
@@ -895,7 +1082,7 @@
           ring.addEventListener('click',()=>{
             const options=byPiece.get(idx)||[];
             if(options.length===1){
-              this.applyMove(options[0]);
+              this.applyMove(options[0],'mouse');
             }else if(options.length>1){
               const firstBtn=host.querySelector(`button[data-piece="${idx}"]`);
               if(firstBtn){
@@ -928,7 +1115,7 @@
             btn.dataset.option=String(optIdx);
             const prefix=movesForPiece.length>1?`${idx+1} 號棋（選項 ${optIdx+1}）`:`${idx+1} 號棋`;
             btn.textContent=`${prefix}：${this.describeMove(mv)}`;
-            btn.addEventListener('click',()=>this.applyMove(mv));
+            btn.addEventListener('click',()=>this.applyMove(mv,'mouse'));
             host.appendChild(btn);
           });
         }
@@ -972,13 +1159,14 @@
       const g=this.$.gPieces; g.innerHTML='';
       g.onclick=(e)=>{
         if(this.state.animating) return;
+        if(!this.isInteractionPermitted('mouse')){ this.handleBlockedInteraction('mouse'); return; }
         const target=e.target.closest('[data-player][data-index]');
         if(!target) return;
         const pid=target.dataset.player;
         const idx=parseInt(target.dataset.index,10);
         if(pid!==this.state.turn||Number.isNaN(idx)) return;
         const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===idx);
-        if(mv) this.applyMove(mv);
+        if(mv) this.applyMove(mv,'mouse');
       };
       for(const p of this.state.players){
         const pcs=this.state.pieces[p.id]||[];
@@ -1010,7 +1198,9 @@
       }
     },
 
-    applyMove(move){
+    applyMove(move,source='system'){
+      if(!move) return;
+      if(!this.isInteractionPermitted(source)){ this.handleBlockedInteraction(source); return; }
       this.pushHistory();
       const pid=this.state.turn;
       const player=this.currentPlayer();
@@ -1098,27 +1288,30 @@
           const faces=this.computeThreatFaces(move.to.idx);
           this.showThreatBadge(toXY.x,toXY.y,faces);
         }else{
-          this.showThreatBadge(toXY.x,toXY.y,[]);
-        }
+        this.showThreatBadge(toXY.x,toXY.y,[]);
+      }
 
-        const again=(this.state.dice===6 && this.state.rules?.extraTurnOnSix);
-        this.state.animating=false;
-        if(!again){
-          this.advanceTurn();
-        }else{
-          this.state.dice=null;
-          this.$.diceOut.textContent='–';
-          this.state.legalMoves=[];
-          this.clearTurnTimer();
-          this.beginTurnTimer();
-          this.saveGame();
-          this.updateTurnUI();
-          this.maybeAutoPlayIfAI();
-        }
-      });
-    },
+      const again=(this.state.dice===6 && this.state.rules?.extraTurnOnSix);
+      this.state.animating=false;
+      this.renderHints();
+      if(!again){
+        this.advanceTurn();
+      }else{
+        this.state.dice=null;
+        this.$.diceOut.textContent='–';
+        this.state.legalMoves=[];
+        this.clearTurnTimer();
+        this.beginTurnTimer();
+        this.saveGame();
+        this.updateTurnUI();
+        this.updateTurnPrompt(true);
+        this.maybeAutoPlayIfAI();
+      }
+    });
+  },
     advanceTurn(){
       if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
+      if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); this._noMoveTimer=null; }
       const currentIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
       const next=(currentIdx<0?0:(currentIdx+1)%this.state.players.length);
       const prevId=this.state.turn;
@@ -1132,21 +1325,20 @@
       this.clearTurnTimer();
       this.updateTurnUI();
       this.saveGame();
+      this.updateTurnPrompt(true);
       this.maybeAutoPlayIfAI();
     },
     onKey(e){
       if(this.state.view!=='game' || this.state.animating) return;
+      if(e.key==='u'||e.key==='U'){ this.undo(); return; }
+      if(!this.isInteractionPermitted('keyboard')){ this.handleBlockedInteraction('keyboard'); return; }
       const mode=this.state.settings.keyboardMode;
       const pIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
       const pieces=this.state.pieces[this.state.turn]||[];
       const pieceCount=pieces.length;
       if(e.code==='Space'){
         e.preventDefault();
-        this.rollDice();
-        return;
-      }
-      if(e.key==='u'||e.key==='U'){
-        this.undo();
+        this.rollDice('keyboard');
         return;
       }
       let selIndex=null;
@@ -1167,7 +1359,7 @@
       }
       if(selIndex!=null){
         const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
-        if(mv) this.applyMove(mv);
+        if(mv) this.applyMove(mv,'keyboard');
       }
     },
 
@@ -1176,25 +1368,31 @@
     saveGame(){ try{ localStorage.setItem('ac_save_v1', JSON.stringify(this.snapshot())); }catch(e){} },
     loadGame(){ try{ const s=localStorage.getItem('ac_save_v1'); return s?JSON.parse(s):null; }catch(e){ return null; } },
     clearSave(){ try{ localStorage.removeItem('ac_save_v1'); }catch(e){} },
-    continueFromSave(){
-      const data=this.loadGame();
-      if(!data){ this.log('冇儲存對局'); return; }
-      this.state.players=data.players||[];
-      this.state.pieces=data.pieces||{};
-      this.state.turn=data.turn||null;
-      const loadedRules=data.rules? Object.assign({}, window.GameRules.DEFAULT_RULES, data.rules) : window.GameRules.DEFAULT_RULES;
+    continueFromSave(data=null){
+      const snapshot=data||this.loadGame();
+      if(!snapshot){ this.log('冇儲存對局'); return; }
+      this.state.players=snapshot.players||[];
+      this.state.pieces=snapshot.pieces||{};
+      this.state.turn=snapshot.turn||null;
+      const loadedRules=snapshot.rules? Object.assign({}, window.GameRules.DEFAULT_RULES, snapshot.rules) : window.GameRules.DEFAULT_RULES;
       this.state.rules=loadedRules;
-      this.state.dice=data.dice??null;
-      this.state.consecutiveSixes=data.consecutiveSixes||{};
+      this.state.dice=snapshot.dice??null;
+      this.state.consecutiveSixes=snapshot.consecutiveSixes||{};
       this.state.history=[];
       this.normalizePieces();
+      this.updateControlAssignments();
       this.toGame();
       this.bootstrapBoard();
       this.redrawPieces();
       this.clearTurnTimer();
       this.beginTurnTimer();
       this.updateTurnUI();
+      this.updateTurnPrompt(true);
       this.log('已載入上局');
+      const toastMsg=this._pendingToast||'已載入上局';
+      if(toastMsg) this.showToast(toastMsg);
+      this._pendingToast=null;
+      if(this.$?.btnContinue) this.$.btnContinue.disabled=false;
       this.maybeAutoPlayIfAI();
     },
     pushHistory(){
@@ -1296,15 +1494,15 @@
           return;
         }
         if(this.state.dice==null){
-          this.rollDice();
+          this.rollDice('system');
           return;
         }
         const mv=this.chooseAIMove();
         if(mv){
-          this.applyMove(mv);
+          this.applyMove(mv,'system');
         }else{
           this.log(`${current.name} 無步可走`);
-          this.advanceTurn();
+          this.handleNoMoves(current);
         }
       },300);
     },
