@@ -536,6 +536,8 @@
       if(this._initialized) return;
       this._initialized=true;
       this.cache(); this.bind(); this.renderLobbyPlayers(2);
+      this.bootstrapBoard();
+      this.toGame();
       if(localStorage.getItem('ac_save_v1')) this.$.btnContinue.disabled=false;
       this.autoLaunch();
     },
