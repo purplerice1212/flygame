@@ -277,7 +277,7 @@
           green:[{from:43,to:4},{from:47,to:8}],
         } }
       },
-      bases:{ perPlayer:1 }
+      bases:{ perPlayer:4 }
     };
 
     const DEFAULT_RULES = {
@@ -285,6 +285,7 @@
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
       homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[]},
+      turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
     };
 
     const mod = (n,m)=>((n%m)+m)%m;
@@ -331,15 +332,42 @@
     function isOwnJumpTile(color,idx){ return BOARD.special.ownColorJump.indices[color].includes(idx); }
     function flightTo(color,idx){ const e=BOARD.special.flightPaths.edges[color].find(e=>e.from===idx); return e?e.to:null; }
     function isStartTile(color,idx){ return idx===BOARD.track.startIndex[color]; }
-    function isSafeTrackTile(color,idx,rules){ if(rules.safeTiles.start && isStartTile(color,idx)) return true; return (rules.safeTiles.list||[]).includes(idx); }
+    function isAnyStartTile(idx){ return Object.values(BOARD.track.startIndex).includes(idx); }
+    function isSafeTrackTile(color,idx,rules){
+      if(rules.safeTiles.start && isAnyStartTile(idx)) return true;
+      return (rules.safeTiles.list||[]).includes(idx);
+    }
 
     function generateLegalMoves(state,rules,dice){
       const player = state.players.find(p=>p.id===state.turn);
+      if(!player) return [];
       const occ = buildOccupancy(state);
-      const myPieces = state.pieces[player.id];
+      const myPieces = state.pieces[player.id]||[];
       const moves=[];
+      const stackInfo=new Map();
+      if(rules.stackMovesTogether){
+        const byIdx=new Map();
+        myPieces.forEach((piece,idx)=>{
+          if(piece.pos?.kind==='track'){
+            if(!byIdx.has(piece.pos.idx)) byIdx.set(piece.pos.idx,[]);
+            byIdx.get(piece.pos.idx).push(idx);
+          }
+        });
+        byIdx.forEach((indices,idx)=>{
+          indices.sort((a,b)=>a-b);
+          stackInfo.set(idx,{indices,leader:indices[0]});
+        });
+      }
       myPieces.forEach((piece,i)=>{
-        const pos=piece.pos; if(pos.kind==='finished') return;
+        const pos=piece.pos; if(!pos || pos.kind==='finished') return;
+        let stackGroup=null;
+        if(rules.stackMovesTogether && pos.kind==='track'){
+          const info=stackInfo.get(pos.idx);
+          if(info && info.indices.length>1){
+            if(i!==info.leader) return;
+            stackGroup=info.indices.slice();
+          }
+        }
         if(pos.kind==='base'){
           if(canTakeoffWith(dice,rules)){
             const destIdx = BOARD.track.startIndex[player.color];
@@ -348,36 +376,53 @@
             const allyCount = tileOcc[player.color]||0;
             if(!(allyCount>0 && !rules.stackEnabled) && !(enemyCount>=2 && !rules.blockadePassThrough)){
               const events=[]; let final=Pos.track(destIdx);
-              ({final,events}=resolveSpecialsAfterLanding(player,final,rules,occ,events));
-              const capture=resolveCaptureOnTrack(player,final,rules,occ);
-              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events,capture});
+              const special=resolveSpecialsAfterLanding(player,final,rules,occ,events);
+              final=special.final; const eventLog=special.events;
+              const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight});
+              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,capture,stack:[i]});
             }
           }
           return;
         }
         const sim = simulateMove(player,pos,dice,rules,occ);
-        if(sim && sim.legal) moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,capture:sim.capture});
+        if(sim && sim.legal){
+          const group = stackGroup?stackGroup.slice():[i];
+          moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,capture:sim.capture,stack:group});
+        }
       });
       return moves;
     }
 
     function simulateMove(player,fromPos,dice,rules,occ){
-      let current=clone(fromPos); let remaining=dice; const events=[];
+      let current=clone(fromPos); let remaining=dice; let events=[];
+      const entryIdx=BOARD.homeLane.entryIndex[player.color];
       const isEnemyBlockade=(idx)=>{ const tileOcc=occ.track[idx]; return Object.entries(tileOcc).filter(([c,n])=>c!==player.color).some(([,n])=>n>=2); };
+      let stepsTaken=0;
       while(remaining>0){
         if(current.kind==='track'){
-          const atEntry = current.idx===BOARD.homeLane.entryIndex[player.color];
-          if(atEntry){ current=Pos.home(0); remaining-=1; events.push({type:'enter-home'}); continue; }
+          if(current.idx===entryIdx){
+            if(stepsTaken===0 || !rules.homeLaneExactEntry){
+              if(remaining<=0) break;
+              current=Pos.home(0); remaining-=1; stepsTaken+=1; events.push({type:'enter-home'}); continue;
+            }
+          }
           const nextIdx = mod(current.idx+1, BOARD.track.length);
           if(!rules.blockadePassThrough && isEnemyBlockade(nextIdx)) return {legal:false,reason:'blocked-by-enemy-stack',events};
-          current=Pos.track(nextIdx); remaining-=1;
+          current=Pos.track(nextIdx); remaining-=1; stepsTaken+=1;
+          if(current.idx===entryIdx){
+            const allowEntry = !rules.homeLaneExactEntry || remaining===0;
+            if(allowEntry){
+              current=Pos.home(0);
+              events.push({type:'enter-home'});
+            }
+          }
         } else if(current.kind==='home'){
           const next=current.idx+1;
-          if(next<BOARD.homeLane.length){ current=Pos.home(next); remaining-=1; }
+          if(next<BOARD.homeLane.length){ current=Pos.home(next); remaining-=1; stepsTaken+=1; }
           else {
             if(rules.finishExact==='exact') return {legal:false,reason:'need-exact-to-finish',events};
             if(rules.finishExact==='noMoveIfOver') return {legal:false,reason:'no-move-if-over',events};
-            if(rules.finishExact==='bounceBack'){ const last=BOARD.homeLane.length-1; const over=next-last; const idx=last-(over-1); current=Pos.home(idx); remaining-=1; }
+            if(rules.finishExact==='bounceBack'){ const last=BOARD.homeLane.length-1; const over=next-last; const idx=last-(over-1); current=Pos.home(idx); remaining-=1; stepsTaken+=1; }
           }
         } else if(current.kind==='base' || current.kind==='finished'){
           return {legal:false,reason:'invalid-start',events};
@@ -385,8 +430,9 @@
       }
       let capture=null;
       if(current.kind==='track'){
-        ({final:current,events}=resolveSpecialsAfterLanding(player,current,rules,occ,events));
-        capture=resolveCaptureOnTrack(player,current,rules,occ);
+        const special=resolveSpecialsAfterLanding(player,current,rules,occ,events);
+        current=special.final; events=special.events;
+        capture=resolveCaptureOnTrack(player,current,rules,occ,{viaFlight:special.viaFlight});
         if(capture?.blocked) return {legal:false,reason:'land-on-enemy-blockade',events};
       } else if(current.kind==='home'){
         if(current.idx===BOARD.homeLane.length-1){ current=Pos.finished(); events.push({type:'finish'}); }
@@ -396,18 +442,25 @@
 
     function resolveSpecialsAfterLanding(player,pos,rules,occ,events){
       let current=clone(pos);
+      let viaFlight=false;
       if(rules.ownColorJump.enabled && current.kind==='track' && isOwnJumpTile(player.color,current.idx)){
         const target = mod(current.idx + rules.ownColorJump.steps, BOARD.track.length);
         current = Pos.track(target); events.push({type:'jump',from:pos.idx,to:target});
       }
-      if(rules.dashedFlight.enabled && current.kind==='track'){
-        const to = flightTo(player.color,current.idx); if(to!=null){ current=Pos.track(to); events.push({type:'flight',from:pos.idx,to}); }
+      const flightsEnabled = (BOARD.special.flightPaths?.enabled!==false);
+      const flightRule = rules.dashedFlight||{};
+      if(flightsEnabled && flightRule.enabled && current.kind==='track'){
+        const to = flightTo(player.color,current.idx);
+        if(to!=null){ current=Pos.track(to); events.push({type:'flight',from:pos.idx,to}); viaFlight=true; }
       }
-      return {final:current,events};
+      return {final:current,events,viaFlight};
     }
 
-    function resolveCaptureOnTrack(player,pos,rules,occ){
+    function resolveCaptureOnTrack(player,pos,rules,occ,context={}){
       if(pos.kind!=='track' || !rules.captureOnLand) return null;
+      const boardAllowsFlightCapture = BOARD.special.flightPaths.captureOnLanding!==false;
+      const flightRule = rules.dashedFlight||{};
+      if(context?.viaFlight && (!boardAllowsFlightCapture || flightRule.captureOnLanding===false)) return null;
       const tileOcc=occ.track[pos.idx];
       const enemyEntries=Object.entries(tileOcc).filter(([c,n])=>c!==player.color && n>0);
       if(enemyEntries.some(([,n])=>n>=2) && !rules.blockadePassThrough) return {blocked:true};
@@ -441,18 +494,27 @@
   <script>
   // =============================== App ================================
   (function ensureUniqueIds(){
-    const seen=new Set();
+    const used=new Set();
     document.querySelectorAll('[id]').forEach(el=>{
       if(!el.id) return;
-      if(seen.has(el.id)){
-        el.remove();
-      }else{
-        seen.add(el.id);
+      if(!used.has(el.id)){
+        used.add(el.id);
+        return;
       }
+      const base=el.id;
+      let suffix=2;
+      let candidate=`${base}-${suffix}`;
+      while(used.has(candidate)){
+        suffix+=1;
+        candidate=`${base}-${suffix}`;
+      }
+      console.warn?.(`[ensureUniqueIds] duplicated id "${base}" renamed to "${candidate}"`);
+      el.id=candidate;
+      used.add(candidate);
     });
   })();
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0 },
     geom:{ track:[], home:{}, bases:{} },
     init(){
       if(this._initialized) return;
@@ -464,7 +526,7 @@
       this.$={
         viewLobby:$('#view-lobby'), viewGame:$('#view-game'), playerCount:$('#playerCount'), playerList:$('#player-list'),
         formSetup:$('#form-setup'), btnQuick:$('#btn-quick'), btnStart:$('#btn-start'), btnLobby:$('#btn-lobby'), btnRoll:$('#btn-roll'),
-        diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'),
+        diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'),
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights')
       };
@@ -486,6 +548,78 @@
       this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); });
       document.addEventListener('keydown',e=>this.onKey(e));
     },
+    currentPlayer(){ return this.state.players.find(p=>p.id===this.state.turn)||null; },
+    log(message){
+      const host=this.$?.log; if(!host) return;
+      const entry=document.createElement('div');
+      const time=new Date().toLocaleTimeString('zh-HK',{hour12:false});
+      entry.textContent=`[${time}] ${message}`;
+      host.appendChild(entry);
+      while(host.childElementCount>80){ host.removeChild(host.firstChild); }
+      host.scrollTop=host.scrollHeight;
+    },
+    getAnimDuration(base){
+      const speed=(this.state.rules?.animSpeed)||'normal';
+      if(speed==='slow') return Math.round(base*1.35);
+      if(speed==='fast') return Math.round(base*0.65);
+      return base;
+    },
+    clearTurnTimer(){
+      if(this.state.turnTimerId){ clearTimeout(this.state.turnTimerId); this.state.turnTimerId=null; }
+      this.state.turnTimerRemaining=0;
+      if(this.$?.timer) this.$.timer.textContent='';
+    },
+    beginTurnTimer(){
+      const secs=Number(this.state.rules?.turnTimerSec||0);
+      if(!(secs>0)){ this.clearTurnTimer(); return; }
+      this.clearTurnTimer();
+      this.state.turnTimerRemaining=secs;
+      const tick=()=>{
+        if(!this.$?.timer) return;
+        this.$.timer.textContent=`⏱️ ${Math.max(0,this.state.turnTimerRemaining)}s`;
+        if(this.state.turnTimerRemaining<=0){
+          this.state.turnTimerId=null;
+          this.handleTurnTimerExpired();
+          return;
+        }
+        this.state.turnTimerRemaining-=1;
+        this.state.turnTimerId=setTimeout(tick,1000);
+      };
+      tick();
+    },
+    handleTurnTimerExpired(){
+      const player=this.currentPlayer();
+      if(!player) return;
+      this.log(`${player.name} 超時！`);
+      if(this.state.dice==null){
+        this.rollDice();
+      }else{
+        this.log('回合已自動結束');
+        this.advanceTurn();
+      }
+    },
+    refreshLegalMoves(){
+      if(!this.state.rules){ this.state.legalMoves=[]; this.highlightMovables(); return; }
+      if(this.state.dice==null){
+        this.state.legalMoves=[];
+      }else{
+        const snapshot={players:this.state.players,pieces:this.state.pieces,turn:this.state.turn};
+        this.state.legalMoves=window.GameRules.generateLegalMoves(snapshot,this.state.rules,this.state.dice);
+      }
+      this.highlightMovables();
+    },
+    updateTurnUI(){
+      const player=this.currentPlayer();
+      this.$.turn.textContent=player?`當前：${player.name}`:'當前：—';
+      this.$.btnRoll.disabled=this.state.animating||this.state.dice!=null;
+      const canUndo=!!(this.state.rules?.undoEnabled && Array.isArray(this.state.history) && this.state.history.length>0);
+      this.$.btnUndo.disabled=!canUndo;
+      this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
+      if(this.state.turnTimerId==null && this.state.dice==null){
+        this.beginTurnTimer();
+      }
+      this.refreshLegalMoves();
+    },
     renderLobbyPlayers(n){
       const host=this.$.playerList; host.innerHTML='';
       const colors=['red','blue','yellow','green'];
@@ -499,9 +633,14 @@
       }
     },
     applyPreset(name){
-      if(name==='classic') this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES);
-      else if(name==='fast') this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES,{takeoff:'fiveOrSix'});
-      else this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES);
+      const cloneRules=(extra={})=>{
+        const base=window.GameRules.DEFAULT_RULES;
+        const copy = (window.structuredClone? structuredClone(base) : JSON.parse(JSON.stringify(base)));
+        return Object.assign(copy,extra);
+      };
+      if(name==='classic') this.state.rules = cloneRules();
+      else if(name==='fast') this.state.rules = cloneRules({takeoff:'fiveOrSix'});
+      else this.state.rules = cloneRules();
     },
     readRulesFromForm(){
       const f=this.$.formSetup; const chk=n=>!!f.querySelector(`[name="${n}"]`)?.checked; const val=n=>f.querySelector(`[name="${n}"]:checked`)?.value; const num=(n,d)=>{const x=parseInt(f.querySelector(`[name="${n}"]`)?.value??d,10); return isNaN(x)?d:x;};
@@ -510,7 +649,10 @@
         captureOnLand:chk('captureOnLand'), stackEnabled:chk('stackEnabled'), stackMovesTogether:chk('stackMovesTogether'), blockadePassThrough:chk('blockadePassThrough'),
         ownColorJump:{enabled:chk('ownColorJumpEnabled'),steps:num('ownColorJumpSteps',4)}, dashedFlight:{enabled:chk('dashedFlightEnabled'),captureOnLanding:chk('captureOnFlight')},
         homeLaneExactEntry:chk('homeLaneExactEntry'), finishExact:(f.querySelector('[name="finishExact"]')?.value)||'exact',
-        safeTiles:{start:chk('startTileSafe'),list:[]}
+        safeTiles:{start:chk('startTileSafe'),list:[]},
+        turnTimerSec:Math.max(0,num('turnTimerSec',0)),
+        animSpeed:(()=>{ const raw=(f.querySelector('[name="animSpeed"]')?.value)||'normal'; return ['slow','normal','fast'].includes(raw)?raw:'normal'; })(),
+        undoEnabled:chk('undoEnabled')
       };
     },
     normalizePieces(){
@@ -529,11 +671,14 @@
       cards.forEach((card,idx)=>{ const name=card.querySelector('[data-name]').value||`玩家${idx+1}`; const color=card.querySelector('[data-color]').value; const type=card.querySelector('[data-type]').value||'human'; if(seen.has(color)) return; seen.add(color); players.push({id:`P${idx+1}`,name,color,type}); });
       if(players.length<2){ this.log('至少需要 2 位玩家'); return; }
       this.state.players=players; this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
+      this.state.consecutiveSixes={};
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
-      this.state.rules = (preset==='custom')? this.readRulesFromForm() : (preset==='fast'? Object.assign({},window.GameRules.DEFAULT_RULES,{takeoff:'fiveOrSix'}) : Object.assign({},window.GameRules.DEFAULT_RULES));
+      if(preset==='custom'){ this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES, this.readRulesFromForm()); }
+      else { this.applyPreset(preset); }
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       for(const p of players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
+        this.state.consecutiveSixes[p.id]=0;
       }
       this.normalizePieces();
       this.state.legalMoves=[]; this.state.animating=false; this.state.dice=null;
@@ -541,11 +686,12 @@
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
+      this.clearTurnTimer();
       this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.saveGame(); this.log('遊戲開始！'); this.maybeAutoPlayIfAI();
       this.$.btnContinue.disabled=false;
     },
     toGame(){ this.$.viewLobby.hidden=true; this.$.viewGame.hidden=false; this.state.view='game'; },
-    toLobby(){ this.$.viewLobby.hidden=false; this.$.viewGame.hidden=true; this.state.view='lobby'; },
+    toLobby(){ this.$.viewLobby.hidden=false; this.$.viewGame.hidden=true; this.state.view='lobby'; this.clearTurnTimer(); },
 
     restartGame(){
       if(!Array.isArray(this.state.players) || this.state.players.length<2){
@@ -554,8 +700,10 @@
       }
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       this.state.pieces={};
+      this.state.consecutiveSixes={};
       for(const p of this.state.players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
+        this.state.consecutiveSixes[p.id]=0;
       }
       this.normalizePieces();
       this.state.turn=this.state.players[0].id;
@@ -567,6 +715,7 @@
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
+      this.clearTurnTimer();
       this.toGame();
       this.bootstrapBoard();
       this.redrawPieces();
@@ -575,6 +724,44 @@
       this.log('已重開新局');
       this.maybeAutoPlayIfAI();
       this.$.btnContinue.disabled=false;
+    },
+
+    rollDice(){
+      if(this.state.view!=='game'){ return; }
+      if(this.state.animating){ this.log('動畫進行中，稍候再擲'); return; }
+      if(this.state.dice!=null){ this.log('本回合已擲骰'); return; }
+      const player=this.currentPlayer();
+      if(!player){ return; }
+      const value=1+Math.floor(Math.random()*6);
+      this.state.dice=value;
+      this.$.diceOut.textContent=String(value);
+      this.log(`${player.name} 擲出 ${value}`);
+      const pid=player.id;
+      const prev=this.state.consecutiveSixes?.[pid]||0;
+      if(!this.state.consecutiveSixes) this.state.consecutiveSixes={};
+      if(value===6){ this.state.consecutiveSixes[pid]=prev+1; }
+      else { this.state.consecutiveSixes[pid]=0; }
+      if(value===6 && this.state.rules?.tripleSixPenalty && this.state.consecutiveSixes[pid]>=3){
+        this.log(`${player.name} 連續三次擲出 6，被判失去回合`);
+        this.state.consecutiveSixes[pid]=0;
+        this.state.dice=null;
+        this.$.diceOut.textContent='–';
+        this.state.legalMoves=[];
+        this.highlightMovables();
+        this.clearTurnTimer();
+        this.advanceTurn();
+        return;
+      }
+      this.refreshLegalMoves();
+      this.saveGame();
+      this.clearTurnTimer();
+      this.beginTurnTimer();
+      if((this.state.legalMoves||[]).length===0){
+        this.log(`${player.name} 無步可走`);
+        this.advanceTurn();
+        return;
+      }
+      this.maybeAutoPlayIfAI();
     },
 
     // --------- Board Rendering ---------
@@ -758,6 +945,7 @@
       const parts=[];
       if(move.kind==='takeoff') parts.push('起飛');
       else if(typeof move.dice==='number') parts.push(`前進 ${move.dice}`);
+      if(Array.isArray(move.stack) && move.stack.length>1) parts.push(`疊子×${move.stack.length}`);
       if(move.events){
         if(move.events.some(ev=>ev.type==='enter-home')) parts.push('入家路');
         if(move.events.some(ev=>ev.type==='jump')) parts.push('跳格');
@@ -826,13 +1014,19 @@
       this.pushHistory();
       const pid=this.state.turn;
       const player=this.currentPlayer();
-      const piece=this.state.pieces[pid][move.pieceIndex];
-      const fromXY=this.posToXY(player.color,piece.pos,move.pieceIndex);
-      const toXY=this.posToXY(player.color,move.to,move.pieceIndex)||fromXY;
+      let movingIndices=Array.isArray(move.stack)?move.stack.slice():[move.pieceIndex];
+      if(!movingIndices.includes(move.pieceIndex)) movingIndices.push(move.pieceIndex);
+      movingIndices=Array.from(new Set(movingIndices)).sort((a,b)=>a-b);
+      const movingPieces=movingIndices.map(idx=>({idx,piece:this.state.pieces[pid]?.[idx]})).filter(entry=>entry.piece);
+      const leadEntry=movingPieces.find(entry=>entry.idx===move.pieceIndex) || movingPieces[0];
+      if(!leadEntry){ this.state.animating=false; return; }
+      const piece=leadEntry.piece;
+      const fromXY=this.posToXY(player.color,piece.pos,leadEntry.idx);
+      const toXY=this.posToXY(player.color,move.to,leadEntry.idx)||fromXY;
       this.state.animating=true;
-      this.animatePiece(player,fromXY,toXY,520).then(async()=>{
+      this.animatePiece(player,fromXY,toXY,this.getAnimDuration(520)).then(async()=>{
         const capturedInfos=[];
-        if(move.capture && move.capture.captured && move.to.kind==='track'){
+        if(move.capture && move.capture.captured && move.capture.captured.length>0 && move.to.kind==='track'){
           for(const opp of this.state.players){
             if(opp.id===pid) continue;
             const oppPieces=this.state.pieces[opp.id]||[];
@@ -850,17 +1044,28 @@
           const slotIndex=typeof capturedPiece?.baseSlot==='number'?capturedPiece.baseSlot:info.pieceIndex;
           const targetBase=this.posToXY(info.opp.color, window.GameRules.Pos.base(slotIndex), slotIndex);
           if(targetBase){
-            await this.animatePiece({color:info.opp.color}, from, targetBase, 420);
+            await this.animatePiece({color:info.opp.color}, from, targetBase, this.getAnimDuration(420));
           }
         }
 
-        const slotIndex=typeof piece.baseSlot==='number'?piece.baseSlot:move.pieceIndex;
-        if(move.to.kind==='base'){
-          piece.pos=window.GameRules.Pos.base(slotIndex);
-        }else{
-          piece.pos=move.to;
-        }
-        piece.baseSlot=slotIndex;
+        const toPosition=(target,slot)=>{
+          if(!target) return null;
+          if(target.kind==='track') return window.GameRules.Pos.track(target.idx);
+          if(target.kind==='home') return window.GameRules.Pos.home(target.idx);
+          if(target.kind==='finished') return window.GameRules.Pos.finished();
+          if(target.kind==='base') return window.GameRules.Pos.base(slot);
+          try{ return window.structuredClone? window.structuredClone(target):JSON.parse(JSON.stringify(target)); }catch(e){ return target; }
+        };
+
+        movingPieces.forEach(({idx,piece:pc})=>{
+          const slotIndex=typeof pc.baseSlot==='number'?pc.baseSlot:idx;
+          pc.baseSlot=slotIndex;
+          if(move.to.kind==='base'){
+            pc.pos=window.GameRules.Pos.base(slotIndex);
+          }else{
+            pc.pos=toPosition(move.to,slotIndex);
+          }
+        });
 
         if(capturedInfos.length>0){
           for(const info of capturedInfos){
@@ -873,10 +1078,14 @@
           this.log(`${player.name} 吃子！把對手送回基地`);
         }
 
+        if(movingPieces.length>1){
+          this.log(`${player.name} 疊子合體移動（${movingPieces.length} 枚）`);
+        }
+
         if(move.events){
           move.events.forEach(ev=>{
             if(ev.type==='enter-home') this.log(`${player.name} 進入家路`);
-            if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules.ownColorJump.steps})`);
+            if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
             if(ev.type==='flight') this.log(`${player.name} 走飛線`);
             if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
           });
@@ -892,17 +1101,39 @@
           this.showThreatBadge(toXY.x,toXY.y,[]);
         }
 
-        const again=(this.state.dice===6 && this.state.rules.extraTurnOnSix);
+        const again=(this.state.dice===6 && this.state.rules?.extraTurnOnSix);
         this.state.animating=false;
         if(!again){
           this.advanceTurn();
         }else{
+          this.state.dice=null;
+          this.$.diceOut.textContent='–';
+          this.state.legalMoves=[];
+          this.clearTurnTimer();
+          this.beginTurnTimer();
+          this.saveGame();
           this.updateTurnUI();
           this.maybeAutoPlayIfAI();
         }
       });
     },
-    advanceTurn(){ const i=this.state.players.findIndex(p=>p.id===this.state.turn); const next=(i+1)%this.state.players.length; this.state.turn=this.state.players[next].id; this.state.dice=null; this.$.diceOut.textContent='–'; this.updateTurnUI(); this.saveGame(); this.maybeAutoPlayIfAI(); },
+    advanceTurn(){
+      if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
+      const currentIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
+      const next=(currentIdx<0?0:(currentIdx+1)%this.state.players.length);
+      const prevId=this.state.turn;
+      const nextId=this.state.players[next].id;
+      if(prevId!=null && this.state.consecutiveSixes){ this.state.consecutiveSixes[prevId]=0; }
+      this.state.turn=nextId;
+      if(this.state.consecutiveSixes){ this.state.consecutiveSixes[nextId]=0; }
+      this.state.dice=null;
+      this.state.legalMoves=[];
+      this.$.diceOut.textContent='–';
+      this.clearTurnTimer();
+      this.updateTurnUI();
+      this.saveGame();
+      this.maybeAutoPlayIfAI();
+    },
     onKey(e){
       if(this.state.view!=='game' || this.state.animating) return;
       const mode=this.state.settings.keyboardMode;
@@ -941,7 +1172,7 @@
     },
 
     // --------- Persistence / Undo ---------
-    snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules})); },
+    snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules,dice:this.state.dice,consecutiveSixes:this.state.consecutiveSixes})); },
     saveGame(){ try{ localStorage.setItem('ac_save_v1', JSON.stringify(this.snapshot())); }catch(e){} },
     loadGame(){ try{ const s=localStorage.getItem('ac_save_v1'); return s?JSON.parse(s):null; }catch(e){ return null; } },
     clearSave(){ try{ localStorage.removeItem('ac_save_v1'); }catch(e){} },
@@ -951,18 +1182,44 @@
       this.state.players=data.players||[];
       this.state.pieces=data.pieces||{};
       this.state.turn=data.turn||null;
-      this.state.rules=data.rules||window.GameRules.DEFAULT_RULES;
+      const loadedRules=data.rules? Object.assign({}, window.GameRules.DEFAULT_RULES, data.rules) : window.GameRules.DEFAULT_RULES;
+      this.state.rules=loadedRules;
+      this.state.dice=data.dice??null;
+      this.state.consecutiveSixes=data.consecutiveSixes||{};
       this.state.history=[];
       this.normalizePieces();
       this.toGame();
       this.bootstrapBoard();
       this.redrawPieces();
+      this.clearTurnTimer();
+      this.beginTurnTimer();
       this.updateTurnUI();
       this.log('已載入上局');
       this.maybeAutoPlayIfAI();
     },
-    pushHistory(){ const snap=this.snapshot(); this.state.history=[snap]; },
-    undo(){ const snap=this.state.history?.pop?.(); if(!snap){ this.log('無可 Undo 嘅步'); return; } this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules; this.state.dice=null; this.normalizePieces(); this.$.diceOut.textContent='–'; this.redrawPieces(); this.$.gHL.innerHTML=''; this.updateTurnUI(); this.saveGame(); this.log('已撤銷一步'); },
+    pushHistory(){
+      if(!this.state.rules?.undoEnabled) return;
+      const snap=this.snapshot();
+      if(!Array.isArray(this.state.history)) this.state.history=[];
+      this.state.history.push(snap);
+      if(this.state.history.length>20) this.state.history.shift();
+    },
+    undo(){
+      if(!this.state.rules?.undoEnabled){ this.log('未啟用 Undo'); return; }
+      const snap=this.state.history?.pop?.();
+      if(!snap){ this.log('無可 Undo 嘅步'); return; }
+      this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules;
+      this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
+      this.normalizePieces();
+      this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
+      this.clearTurnTimer();
+      this.beginTurnTimer();
+      this.redrawPieces(); this.$.gHL.innerHTML='';
+      this.updateTurnUI();
+      this.saveGame();
+      this.log('已撤銷一步');
+      this.maybeAutoPlayIfAI();
+    },
 
     // --------- AI ---------
     isAI(player){ return (player.type||'human')==='ai'; },
@@ -1027,6 +1284,7 @@
       return scored[0].move;
     },
     maybeAutoPlayIfAI(){
+      if(this.state.view!=='game') return;
       const player=this.currentPlayer();
       if(!this.isAI(player)) return;
       setTimeout(()=>{
@@ -1052,10 +1310,10 @@
     },
 
     // --------- Anim / Effects ---------
-    animatePiece(player,from,to,duration=480){ return new Promise(resolve=>{ const g=this.$.gHL; const NS='http://www.w3.org/2000/svg'; const ghost=document.createElementNS(NS,'circle'); ghost.setAttribute('cx',from.x); ghost.setAttribute('cy',from.y); ghost.setAttribute('r',18); ghost.setAttribute('fill',`var(--${player.color})`); ghost.setAttribute('stroke','#0b0f14'); ghost.setAttribute('stroke-width','3'); g.appendChild(ghost); const t0=performance.now(); const ease=t=>1-Math.pow(1-t,3); const step=(now)=>{ const p=Math.min(1,(now-t0)/duration), e=ease(p); const x=from.x+(to.x-from.x)*e, y=from.y+(to.y-from.y)*e; ghost.setAttribute('cx',x); ghost.setAttribute('cy',y); if(p<1) requestAnimationFrame(step); else { g.removeChild(ghost); resolve(); } }; requestAnimationFrame(step); }); },
+    animatePiece(player,from,to,duration=480){ duration=this.getAnimDuration(duration); return new Promise(resolve=>{ const g=this.$.gHL; const NS='http://www.w3.org/2000/svg'; const ghost=document.createElementNS(NS,'circle'); ghost.setAttribute('cx',from.x); ghost.setAttribute('cy',from.y); ghost.setAttribute('r',18); ghost.setAttribute('fill',`var(--${player.color})`); ghost.setAttribute('stroke','#0b0f14'); ghost.setAttribute('stroke-width','3'); g.appendChild(ghost); const t0=performance.now(); const ease=t=>1-Math.pow(1-t,3); const step=(now)=>{ const p=Math.min(1,(now-t0)/duration), e=ease(p); const x=from.x+(to.x-from.x)*e, y=from.y+(to.y-from.y)*e; ghost.setAttribute('cx',x); ghost.setAttribute('cy',y); if(p<1) requestAnimationFrame(step); else { g.removeChild(ghost); resolve(); } }; requestAnimationFrame(step); }); },
     pulseAt(x,y,color){ const g=this.$.gHL; const NS='http://www.w3.org/2000/svg'; const ring=document.createElementNS(NS,'circle'); ring.setAttribute('cx',x); ring.setAttribute('cy',y); ring.setAttribute('r','8'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',color); ring.setAttribute('stroke-width','3'); ring.setAttribute('opacity','0.9'); g.appendChild(ring); let r=8; const id=setInterval(()=>{ r+=4; ring.setAttribute('r',r); const op=parseFloat(ring.getAttribute('opacity')); ring.setAttribute('opacity',String(Math.max(0,op-0.12))); if(r>36){ clearInterval(id); g.removeChild(ring);} },16); },
     computeThreatFaces(targetIdx){ const L=window.GameRules.BOARD.track.length; const me=this.currentPlayer(); const faces=new Set(); for(const opp of this.state.players){ if(opp.id===me.id) continue; const oppPieces=this.state.pieces[opp.id]||[]; for(const pc of oppPieces){ if(pc.pos.kind!=='track') continue; const d=((targetIdx-pc.pos.idx)%L+L)%L; if(d>=1&&d<=6) faces.add(d); } } return Array.from(faces).sort((a,b)=>a-b); },
-    showThreatBadge(x,y,faces){ const g=this.$.gHL; g.querySelectorAll('.threat-badge').forEach(n=>n.remove()); if(!faces||faces.length===0) return; const NS='http://www.w3.org/2000/svg'; const bx=x+26,by=y-26; const badge=document.createElementNS(NS,'g'); badge.setAttribute('class','threat-badge'); const rect=document.createElementNS(NS,'rect'); rect.setAttribute('x',bx-12); rect.setAttribute('y',by-10); rect.setAttribute('width',24); rect.setAttribute('height',20); rect.setAttribute('rx',6); rect.setAttribute('fill','#ef4444'); rect.setAttribute('stroke','#000'); rect.setAttribute('stroke-width','2'); const txt=document.createElementNS(NS,'text'); txt.setAttribute('x',bx); txt.setAttribute('y',by+5); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.setAttribute('fill','#0b0f14'); txt.textContent=String(faces[0]); badge.appendChild(rect); badge.appendChild(txt); g.appendChild(badge); }
+    showThreatBadge(x,y,faces){ const g=this.$.gHL; g.querySelectorAll('.threat-badge').forEach(n=>n.remove()); if(!faces||faces.length===0) return; const NS='http://www.w3.org/2000/svg'; const bx=x+26,by=y-26; const badge=document.createElementNS(NS,'g'); badge.setAttribute('class','threat-badge'); const rect=document.createElementNS(NS,'rect'); const label=faces.join('/'); const padding=6; const width=Math.max(24,label.length*7+padding*2); rect.setAttribute('x',bx-width/2); rect.setAttribute('y',by-10); rect.setAttribute('width',width); rect.setAttribute('height',20); rect.setAttribute('rx',6); rect.setAttribute('fill','#ef4444'); rect.setAttribute('stroke','#000'); rect.setAttribute('stroke-width','2'); const txt=document.createElementNS(NS,'text'); txt.setAttribute('x',bx); txt.setAttribute('y',by+5); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.setAttribute('fill','#0b0f14'); txt.textContent=label; badge.appendChild(rect); badge.appendChild(txt); g.appendChild(badge); }
   };
   window.App = App; window.addEventListener('DOMContentLoaded',()=>App.init());
   // ============================= End App ===============================
