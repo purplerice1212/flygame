@@ -12,6 +12,7 @@
       --bg:#0a0a0a;--fg:#e5e7eb;--muted:#9ca3af;--card:#0b0f14;--tile-grid:#374151;
       --red:#ff5c8a;--blue:#33ccff;--yellow:#ffd633;--green:#66ffb2;
       --red-ghost:#7f2c42;--blue-ghost:#1b4a5a;--yellow-ghost:#7a6a1a;--green-ghost:#2a5f49;
+      --accent:#22d3ee;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -276,7 +277,7 @@
           green:[{from:43,to:4},{from:47,to:8}],
         } }
       },
-      bases:{ perPlayer:4 }
+      bases:{ perPlayer:1 }
     };
 
     const DEFAULT_RULES = {
@@ -290,8 +291,19 @@
     const clone = (x)=> (window.structuredClone? structuredClone(x) : JSON.parse(JSON.stringify(x)));
 
     const Pos = {
-      base:()=>({kind:'base'}), track:(idx)=>({kind:'track',idx}), home:(idx)=>({kind:'home',idx}), finished:()=>({kind:'finished'}),
-      isEqual:(a,b)=>a.kind===b.kind && (a.idx??-1)===(b.idx??-1)
+      base:(slot=0)=>({kind:'base',slot}),
+      track:(idx)=>({kind:'track',idx}),
+      home:(idx)=>({kind:'home',idx}),
+      finished:()=>({kind:'finished'}),
+      isEqual:(a,b)=>{
+        if(a.kind!==b.kind) return false;
+        const key = (obj)=>{
+          if(typeof obj.idx==='number') return obj.idx;
+          if(typeof obj.slot==='number') return obj.slot;
+          return -1;
+        };
+        return key(a)===key(b);
+      }
     };
 
     function buildOccupancy(state){
@@ -409,7 +421,8 @@
     // ------------ Dev Console Smoke Tests -------------
     (function devTests(){
       const players=[{id:'P1',name:'Mandy',color:'red'},{id:'P2',name:'Brian',color:'blue'}];
-      const basePieces={P1:[0,0,0,0].map(()=>({pos:Pos.base()})),P2:[0,0,0,0].map(()=>({pos:Pos.base()}))};
+      const mkBasePieces=()=>Array.from({length:BOARD.bases.perPlayer},(_,i)=>({pos:Pos.base(i)}));
+      const basePieces={P1:mkBasePieces(),P2:mkBasePieces()};
       const state={turn:'P1',players,pieces:clone(basePieces)}; const rules=DEFAULT_RULES;
       console.log('[Test] 起飛(6) 應有步：', generateLegalMoves(state,rules,6));
       state.pieces.P1[0].pos = Pos.track(BOARD.track.startIndex.red);
@@ -427,10 +440,23 @@
 
   <script>
   // =============================== App ================================
+  (function ensureUniqueIds(){
+    const seen=new Set();
+    document.querySelectorAll('[id]').forEach(el=>{
+      if(!el.id) return;
+      if(seen.has(el.id)){
+        el.remove();
+      }else{
+        seen.add(el.id);
+      }
+    });
+  })();
   const App = {
     state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false },
     geom:{ track:[], home:{}, bases:{} },
     init(){
+      if(this._initialized) return;
+      this._initialized=true;
       this.cache(); this.bind(); this.renderLobbyPlayers(2);
       if(localStorage.getItem('ac_save_v1')) this.$.btnContinue.disabled=false;
     },
@@ -445,6 +471,8 @@
       function $(sel){ return document.querySelector(sel); }
     },
     bind(){
+      if(this._bound) return;
+      this._bound=true;
       this.$.playerCount.addEventListener('change',e=>this.renderLobbyPlayers(parseInt(e.target.value,10)));
       this.$.formSetup.addEventListener('submit',e=>{ e.preventDefault(); this.startGame(); });
       this.$.btnQuick.addEventListener('click',()=>{ this.applyPreset('classic'); this.startGame(); });
@@ -485,6 +513,16 @@
         safeTiles:{start:chk('startTileSafe'),list:[]}
       };
     },
+    normalizePieces(){
+      for(const player of this.state.players){
+        const pcs=Array.isArray(this.state.pieces[player.id])?this.state.pieces[player.id]:[];
+        pcs.forEach((pc,idx)=>{
+          if(typeof pc.baseSlot!=='number') pc.baseSlot=idx;
+          if(pc.pos?.kind==='base' && typeof pc.pos.slot!=='number') pc.pos.slot=pc.baseSlot;
+        });
+        this.state.pieces[player.id]=pcs;
+      }
+    },
     startGame(){
       // players
       const cards=this.$.playerList.querySelectorAll('[data-player-card]'); const players=[]; const seen=new Set();
@@ -493,7 +531,11 @@
       this.state.players=players; this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
       this.state.rules = (preset==='custom')? this.readRulesFromForm() : (preset==='fast'? Object.assign({},window.GameRules.DEFAULT_RULES,{takeoff:'fiveOrSix'}) : Object.assign({},window.GameRules.DEFAULT_RULES));
-      for(const p of players){ this.state.pieces[p.id]=[0,1,2,3].map(()=>({pos:window.GameRules.Pos.base()})); }
+      const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
+      for(const p of players){
+        this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
+      }
+      this.normalizePieces();
       this.state.legalMoves=[]; this.state.animating=false;
       this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.saveGame(); this.log('遊戲開始！'); this.maybeAutoPlayIfAI();
     },
@@ -581,7 +623,7 @@
 
       const pcs=this.state.pieces[player.id]||[];
       pcs.forEach((pc,idx)=>{
-        const where=this.posToXY(player.color,pc.pos);
+        const where=this.posToXY(player.color,pc.pos,idx);
         if(!where) return;
         const hasMove=byPiece.has(idx);
         const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -594,8 +636,18 @@
         if(hasMove){
           ring.style.cursor='pointer';
           ring.addEventListener('click',()=>{
-            const options=byPiece.get(idx);
-            if(options?.length) this.applyMove(options[0]);
+            const options=byPiece.get(idx)||[];
+            if(options.length===1){
+              this.applyMove(options[0]);
+            }else if(options.length>1){
+              const firstBtn=host.querySelector(`button[data-piece="${idx}"]`);
+              if(firstBtn){
+                firstBtn.focus();
+                if(firstBtn.scrollIntoView){
+                  firstBtn.scrollIntoView({block:'nearest'});
+                }
+              }
+            }
           });
         }
         g.appendChild(ring);
@@ -611,13 +663,17 @@
 
         if(hasMove){
           const movesForPiece=byPiece.get(idx);
-          const btn=document.createElement('button');
-          btn.type='button';
-          btn.className='btn';
-          const labels=new Set(movesForPiece.map(m=>m.kind==='takeoff'?'起飛':'前進'));
-          btn.textContent=`${idx+1} 號棋：${Array.from(labels).join(' / ')}`;
-          btn.addEventListener('click',()=>{ if(movesForPiece.length) this.applyMove(movesForPiece[0]); });
-          host.appendChild(btn);
+          movesForPiece.forEach((mv,optIdx)=>{
+            const btn=document.createElement('button');
+            btn.type='button';
+            btn.className='btn';
+            btn.dataset.piece=String(idx);
+            btn.dataset.option=String(optIdx);
+            const prefix=movesForPiece.length>1?`${idx+1} 號棋（選項 ${optIdx+1}）`:`${idx+1} 號棋`;
+            btn.textContent=`${prefix}：${this.describeMove(mv)}`;
+            btn.addEventListener('click',()=>this.applyMove(mv));
+            host.appendChild(btn);
+          });
         }
       });
 
@@ -628,9 +684,72 @@
         host.appendChild(span);
       }
     },
-    posToXY(color,pos){ if(pos.kind==='track') return this.geom.track[pos.idx]; if(pos.kind==='home') return this.geom.home[color][pos.idx]; if(pos.kind==='base'){ const slots=this.geom.bases[color]; return slots[0]; } return null; },
-    redrawPieces(){ const g=this.$.gPieces; g.innerHTML=''; g.onclick=(e)=>{ if(this.state.animating) return; const t=e.target.closest('circle'); if(!t) return; const pid=t.dataset.player; const idx=parseInt(t.dataset.index,10); if(pid!==this.state.turn||Number.isNaN(idx)) return; const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===idx); if(mv) this.applyMove(mv); };
-      for(const p of this.state.players){ const pcs=this.state.pieces[p.id]; pcs.forEach((pc,idx)=>{ const xy=this.posToXY(p.color,pc.pos); if(!xy) return; const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xy.x); c.setAttribute('cy',xy.y); c.setAttribute('r',18); c.setAttribute('fill',`var(--${p.color})`); c.setAttribute('stroke','#0b0f14'); c.setAttribute('stroke-width','3'); c.dataset.player=p.id; c.dataset.index=idx; this.$.gPieces.appendChild(c); const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',xy.x); t.setAttribute('y',xy.y+4); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.setAttribute('fill','#0b0f14'); t.textContent=String(idx+1); this.$.gPieces.appendChild(t); }); }
+    describeMove(move){
+      const parts=[];
+      if(move.kind==='takeoff') parts.push('起飛');
+      else if(typeof move.dice==='number') parts.push(`前進 ${move.dice}`);
+      if(move.events){
+        if(move.events.some(ev=>ev.type==='enter-home')) parts.push('入家路');
+        if(move.events.some(ev=>ev.type==='jump')) parts.push('跳格');
+        if(move.events.some(ev=>ev.type==='flight')) parts.push('飛行');
+        if(move.events.some(ev=>ev.type==='finish')) parts.push('終點');
+      }
+      const capturedCount=Array.isArray(move.capture?.captured)?move.capture.captured.length:0;
+      if(capturedCount>0) parts.push('吃子');
+      return parts.join(' → ')||'移動';
+    },
+    posToXY(color,pos,pieceIndex=null){
+      if(pos.kind==='track') return this.geom.track[pos.idx];
+      if(pos.kind==='home') return this.geom.home[color][pos.idx];
+      if(pos.kind==='base'){
+        const slots=this.geom.bases[color]||[];
+        if(slots.length===0) return null;
+        const slotFromPos=(typeof pos.slot==='number')?pos.slot:null;
+        const idx=(slotFromPos!=null?slotFromPos:(pieceIndex!=null?pieceIndex:0));
+        return slots[idx%slots.length];
+      }
+      return null;
+    },
+    redrawPieces(){
+      const g=this.$.gPieces; g.innerHTML='';
+      g.onclick=(e)=>{
+        if(this.state.animating) return;
+        const target=e.target.closest('[data-player][data-index]');
+        if(!target) return;
+        const pid=target.dataset.player;
+        const idx=parseInt(target.dataset.index,10);
+        if(pid!==this.state.turn||Number.isNaN(idx)) return;
+        const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===idx);
+        if(mv) this.applyMove(mv);
+      };
+      for(const p of this.state.players){
+        const pcs=this.state.pieces[p.id]||[];
+        pcs.forEach((pc,idx)=>{
+          const xy=this.posToXY(p.color,pc.pos,idx);
+          if(!xy) return;
+          const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+          c.setAttribute('cx',xy.x);
+          c.setAttribute('cy',xy.y);
+          c.setAttribute('r',18);
+          c.setAttribute('fill',`var(--${p.color})`);
+          c.setAttribute('stroke','#0b0f14');
+          c.setAttribute('stroke-width','3');
+          c.dataset.player=p.id;
+          c.dataset.index=idx;
+          this.$.gPieces.appendChild(c);
+          const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x',xy.x);
+          t.setAttribute('y',xy.y+4);
+          t.setAttribute('text-anchor','middle');
+          t.setAttribute('font-size','12');
+          t.setAttribute('fill','#0b0f14');
+          t.textContent=String(idx+1);
+          t.dataset.player=p.id;
+          t.dataset.index=idx;
+          t.style.cursor='pointer';
+          this.$.gPieces.appendChild(t);
+        });
+      }
     },
 
     applyMove(move){
@@ -638,15 +757,16 @@
       const pid=this.state.turn;
       const player=this.currentPlayer();
       const piece=this.state.pieces[pid][move.pieceIndex];
-      const fromXY=this.posToXY(player.color,piece.pos);
-      const toXY=this.posToXY(player.color,move.to)||fromXY;
+      const fromXY=this.posToXY(player.color,piece.pos,move.pieceIndex);
+      const toXY=this.posToXY(player.color,move.to,move.pieceIndex)||fromXY;
       this.state.animating=true;
       this.animatePiece(player,fromXY,toXY,520).then(async()=>{
         const capturedInfos=[];
         if(move.capture && move.capture.captured && move.to.kind==='track'){
           for(const opp of this.state.players){
             if(opp.id===pid) continue;
-            this.state.pieces[opp.id].forEach((pc,idx)=>{
+            const oppPieces=this.state.pieces[opp.id]||[];
+            oppPieces.forEach((pc,idx)=>{
               if(pc.pos.kind==='track' && pc.pos.idx===move.to.idx){
                 capturedInfos.push({opp,pieceIndex:idx});
               }
@@ -656,15 +776,29 @@
 
         for(const info of capturedInfos){
           const from=this.geom.track[move.to.idx];
-          const baseSlot=this.geom.bases[info.opp.color][0];
-          await this.animatePiece({color:info.opp.color}, from, baseSlot, 420);
+          const capturedPiece=this.state.pieces[info.opp.id]?.[info.pieceIndex];
+          const slotIndex=typeof capturedPiece?.baseSlot==='number'?capturedPiece.baseSlot:info.pieceIndex;
+          const targetBase=this.posToXY(info.opp.color, window.GameRules.Pos.base(slotIndex), slotIndex);
+          if(targetBase){
+            await this.animatePiece({color:info.opp.color}, from, targetBase, 420);
+          }
         }
 
-        piece.pos=move.to;
+        const slotIndex=typeof piece.baseSlot==='number'?piece.baseSlot:move.pieceIndex;
+        if(move.to.kind==='base'){
+          piece.pos=window.GameRules.Pos.base(slotIndex);
+        }else{
+          piece.pos=move.to;
+        }
+        piece.baseSlot=slotIndex;
 
         if(capturedInfos.length>0){
           for(const info of capturedInfos){
-            this.state.pieces[info.opp.id][info.pieceIndex].pos=window.GameRules.Pos.base();
+            const capturedPiece=this.state.pieces[info.opp.id]?.[info.pieceIndex];
+            if(!capturedPiece) continue;
+            const slot=typeof capturedPiece.baseSlot==='number'?capturedPiece.baseSlot:info.pieceIndex;
+            capturedPiece.baseSlot=slot;
+            capturedPiece.pos=window.GameRules.Pos.base(slot);
           }
           this.log(`${player.name} 吃子！把對手送回基地`);
         }
@@ -699,23 +833,129 @@
       });
     },
     advanceTurn(){ const i=this.state.players.findIndex(p=>p.id===this.state.turn); const next=(i+1)%this.state.players.length; this.state.turn=this.state.players[next].id; this.state.dice=null; this.$.diceOut.textContent='–'; this.updateTurnUI(); this.saveGame(); this.maybeAutoPlayIfAI(); },
-    onKey(e){ if(this.state.view!=='game' || this.state.animating) return; const mode=this.state.settings.keyboardMode; const pIdx=this.state.players.findIndex(p=>p.id===this.state.turn); if(e.code==='Space'){ e.preventDefault(); this.rollDice(); return; } if(e.key==='u'||e.key==='U'){ this.undo(); return; } let selIndex=null; if(mode==='shared'){ if(['1','2','3','4'].includes(e.key)) selIndex=parseInt(e.key,10)-1; } else if(mode==='dual'&&this.state.players.length>=2){ if(pIdx===0 && ['1','2','3','4'].includes(e.key)) selIndex=parseInt(e.key,10)-1; if(pIdx===1 && ['7','8','9','0'].includes(e.key)) selIndex=(e.key==='0'?3:parseInt(e.key,10)-7); } if(selIndex!=null){ const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex); if(mv) this.applyMove(mv); } },
+    onKey(e){
+      if(this.state.view!=='game' || this.state.animating) return;
+      const mode=this.state.settings.keyboardMode;
+      const pIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
+      const pieces=this.state.pieces[this.state.turn]||[];
+      const pieceCount=pieces.length;
+      if(e.code==='Space'){
+        e.preventDefault();
+        this.rollDice();
+        return;
+      }
+      if(e.key==='u'||e.key==='U'){
+        this.undo();
+        return;
+      }
+      let selIndex=null;
+      if(mode==='shared'){
+        const keys=['1','2','3','4','5','6','7','8','9'];
+        const idx=keys.indexOf(e.key);
+        if(idx>-1 && idx<pieceCount) selIndex=idx;
+      } else if(mode==='dual'&&this.state.players.length>=2){
+        if(pIdx===0){
+          const keys=['1','2','3','4'];
+          const idx=keys.indexOf(e.key);
+          if(idx>-1 && idx<pieceCount) selIndex=idx;
+        } else if(pIdx===1){
+          const keys=['7','8','9','0'];
+          const idx=keys.indexOf(e.key);
+          if(idx>-1 && idx<pieceCount) selIndex=idx;
+        }
+      }
+      if(selIndex!=null){
+        const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
+        if(mv) this.applyMove(mv);
+      }
+    },
 
     // --------- Persistence / Undo ---------
     snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules})); },
     saveGame(){ try{ localStorage.setItem('ac_save_v1', JSON.stringify(this.snapshot())); }catch(e){} },
     loadGame(){ try{ const s=localStorage.getItem('ac_save_v1'); return s?JSON.parse(s):null; }catch(e){ return null; } },
     clearSave(){ try{ localStorage.removeItem('ac_save_v1'); }catch(e){} },
-    continueFromSave(){ const data=this.loadGame(); if(!data){ this.log('冇儲存對局'); return; } this.state.players=data.players; this.state.pieces=data.pieces; this.state.turn=data.turn; this.state.rules=data.rules; this.state.history=[]; this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.log('已載入上局'); this.maybeAutoPlayIfAI(); },
+    continueFromSave(){
+      const data=this.loadGame();
+      if(!data){ this.log('冇儲存對局'); return; }
+      this.state.players=data.players||[];
+      this.state.pieces=data.pieces||{};
+      this.state.turn=data.turn||null;
+      this.state.rules=data.rules||window.GameRules.DEFAULT_RULES;
+      this.state.history=[];
+      this.normalizePieces();
+      this.toGame();
+      this.bootstrapBoard();
+      this.redrawPieces();
+      this.updateTurnUI();
+      this.log('已載入上局');
+      this.maybeAutoPlayIfAI();
+    },
     pushHistory(){ const snap=this.snapshot(); this.state.history=[snap]; },
-    undo(){ const snap=this.state.history?.pop?.(); if(!snap){ this.log('無可 Undo 嘅步'); return; } this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules; this.state.dice=null; this.$.diceOut.textContent='–'; this.redrawPieces(); this.$.gHL.innerHTML=''; this.updateTurnUI(); this.saveGame(); this.log('已撤銷一步'); },
+    undo(){ const snap=this.state.history?.pop?.(); if(!snap){ this.log('無可 Undo 嘅步'); return; } this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules; this.state.dice=null; this.normalizePieces(); this.$.diceOut.textContent='–'; this.redrawPieces(); this.$.gHL.innerHTML=''; this.updateTurnUI(); this.saveGame(); this.log('已撤銷一步'); },
 
     // --------- AI ---------
     isAI(player){ return (player.type||'human')==='ai'; },
-    chooseAIMove(){ const player=this.currentPlayer(); const moves=this.state.legalMoves||[]; if(moves.length===0) return null; const rules=this.state.rules||window.GameRules.DEFAULT_RULES; const distToFinish=(color,pos)=>{ const L=window.GameRules.BOARD.track.length; const entry=window.GameRules.BOARD.homeLane.entryIndex[color]; const homeLen=window.GameRules.BOARD.homeLane.length; if(pos.kind==='finished') return 0; if(pos.kind==='home') return (homeLen-1-pos.idx); if(pos.kind==='track'){ const dToEntry=((entry-pos.idx)%L+L)%L; return dToEntry+1+(homeLen-1);} return 999; }; const isSafeTile=(color,idx)=>{ const start=window.GameRules.BOARD.track.startIndex[color]; if(rules.safeTiles?.start && idx===start) return true; return (rules.safeTiles?.list||[]).includes(idx); }; const captureRiskProb=(color,idx)=>{ if(isSafeTile(color,idx)) return 0; let hits=0; const L=window.GameRules.BOARD.track.length; for(const opp of this.state.players){ if(opp.id===player.id) continue; for(const pc of this.state.pieces[opp.id]){ if(pc.pos.kind!=='track') continue; const d=((idx-pc.pos.idx)%L+L)%L; if(d>=1&&d<=6) hits+=1; } } return Math.min(1,hits/6); };
-      const scored=moves.map(m=>{ const beforePos=this.state.pieces[player.id][m.pieceIndex].pos; const before=distToFinish(player.color,beforePos); const after=distToFinish(player.color,m.to); let score=(before-after)*4; const cap=(m.capture&&(m.capture.captured||[]).length)||0; score+=cap*1000; if(m.to.kind==='finished') score+=900; if((m.events||[]).some(e=>e.type==='enter-home')) score+=400; if((m.events||[]).some(e=>e.type==='jump')) score+=140; if((m.events||[]).some(e=>e.type==='flight')) score+=90; if(m.kind==='takeoff') score+=80; if(m.to.kind==='track' && isSafeTile(player.color,m.to.idx)) score+=60; if(m.to.kind==='track'){ const prob=captureRiskProb(player.color,m.to.idx); score-=prob*700; } return {move:m,score,before,after}; });
+    chooseAIMove(){
+      const player=this.currentPlayer();
+      const moves=this.state.legalMoves||[];
+      if(moves.length===0) return null;
+      const rules=this.state.rules||window.GameRules.DEFAULT_RULES;
+      const distToFinish=(color,pos)=>{
+        const L=window.GameRules.BOARD.track.length;
+        const entry=window.GameRules.BOARD.homeLane.entryIndex[color];
+        const homeLen=window.GameRules.BOARD.homeLane.length;
+        if(pos.kind==='finished') return 0;
+        if(pos.kind==='home') return (homeLen-1-pos.idx);
+        if(pos.kind==='track'){
+          const dToEntry=((entry-pos.idx)%L+L)%L;
+          return dToEntry+1+(homeLen-1);
+        }
+        return 999;
+      };
+      const isSafeTile=(color,idx)=>{
+        const start=window.GameRules.BOARD.track.startIndex[color];
+        if(rules.safeTiles?.start && idx===start) return true;
+        return (rules.safeTiles?.list||[]).includes(idx);
+      };
+      const captureRiskProb=(color,idx)=>{
+        if(isSafeTile(color,idx)) return 0;
+        let hits=0;
+        const L=window.GameRules.BOARD.track.length;
+        for(const opp of this.state.players){
+          if(opp.id===player.id) continue;
+          const oppPieces=this.state.pieces[opp.id]||[];
+          for(const pc of oppPieces){
+            if(pc.pos.kind!=='track') continue;
+            const d=((idx-pc.pos.idx)%L+L)%L;
+            if(d>=1&&d<=6) hits+=1;
+          }
+        }
+        return Math.min(1,hits/6);
+      };
+      const myPieces=this.state.pieces[player.id]||[];
+      const scored=moves.map(m=>{
+        const beforePos=myPieces[m.pieceIndex]?.pos||window.GameRules.Pos.base();
+        const before=distToFinish(player.color,beforePos);
+        const after=distToFinish(player.color,m.to);
+        let score=(before-after)*4;
+        const cap=(m.capture&&(m.capture.captured||[]).length)||0;
+        score+=cap*1000;
+        if(m.to.kind==='finished') score+=900;
+        if((m.events||[]).some(e=>e.type==='enter-home')) score+=400;
+        if((m.events||[]).some(e=>e.type==='jump')) score+=140;
+        if((m.events||[]).some(e=>e.type==='flight')) score+=90;
+        if(m.kind==='takeoff') score+=80;
+        if(m.to.kind==='track' && isSafeTile(player.color,m.to.idx)) score+=60;
+        if(m.to.kind==='track'){
+          const prob=captureRiskProb(player.color,m.to.idx);
+          score-=prob*700;
+        }
+        return {move:m,score,before,after};
+      });
       scored.sort((a,b)=> b.score!==a.score? b.score-a.score : ((a.before-a.after)!==(b.before-b.after)? (b.before-b.after)-(a.before-a.after) : (((b.move.capture?.captured||[]).length)-((a.move.capture?.captured||[]).length))));
-      return scored[0].move; },
+      return scored[0].move;
+    },
     maybeAutoPlayIfAI(){
       const player=this.currentPlayer();
       if(!this.isAI(player)) return;
@@ -744,7 +984,7 @@
     // --------- Anim / Effects ---------
     animatePiece(player,from,to,duration=480){ return new Promise(resolve=>{ const g=this.$.gHL; const NS='http://www.w3.org/2000/svg'; const ghost=document.createElementNS(NS,'circle'); ghost.setAttribute('cx',from.x); ghost.setAttribute('cy',from.y); ghost.setAttribute('r',18); ghost.setAttribute('fill',`var(--${player.color})`); ghost.setAttribute('stroke','#0b0f14'); ghost.setAttribute('stroke-width','3'); g.appendChild(ghost); const t0=performance.now(); const ease=t=>1-Math.pow(1-t,3); const step=(now)=>{ const p=Math.min(1,(now-t0)/duration), e=ease(p); const x=from.x+(to.x-from.x)*e, y=from.y+(to.y-from.y)*e; ghost.setAttribute('cx',x); ghost.setAttribute('cy',y); if(p<1) requestAnimationFrame(step); else { g.removeChild(ghost); resolve(); } }; requestAnimationFrame(step); }); },
     pulseAt(x,y,color){ const g=this.$.gHL; const NS='http://www.w3.org/2000/svg'; const ring=document.createElementNS(NS,'circle'); ring.setAttribute('cx',x); ring.setAttribute('cy',y); ring.setAttribute('r','8'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',color); ring.setAttribute('stroke-width','3'); ring.setAttribute('opacity','0.9'); g.appendChild(ring); let r=8; const id=setInterval(()=>{ r+=4; ring.setAttribute('r',r); const op=parseFloat(ring.getAttribute('opacity')); ring.setAttribute('opacity',String(Math.max(0,op-0.12))); if(r>36){ clearInterval(id); g.removeChild(ring);} },16); },
-    computeThreatFaces(targetIdx){ const L=window.GameRules.BOARD.track.length; const me=this.currentPlayer(); const faces=new Set(); for(const opp of this.state.players){ if(opp.id===me.id) continue; for(const pc of this.state.pieces[opp.id]){ if(pc.pos.kind!=='track') continue; const d=((targetIdx-pc.pos.idx)%L+L)%L; if(d>=1&&d<=6) faces.add(d); } } return Array.from(faces).sort((a,b)=>a-b); },
+    computeThreatFaces(targetIdx){ const L=window.GameRules.BOARD.track.length; const me=this.currentPlayer(); const faces=new Set(); for(const opp of this.state.players){ if(opp.id===me.id) continue; const oppPieces=this.state.pieces[opp.id]||[]; for(const pc of oppPieces){ if(pc.pos.kind!=='track') continue; const d=((targetIdx-pc.pos.idx)%L+L)%L; if(d>=1&&d<=6) faces.add(d); } } return Array.from(faces).sort((a,b)=>a-b); },
     showThreatBadge(x,y,faces){ const g=this.$.gHL; g.querySelectorAll('.threat-badge').forEach(n=>n.remove()); if(!faces||faces.length===0) return; const NS='http://www.w3.org/2000/svg'; const bx=x+26,by=y-26; const badge=document.createElementNS(NS,'g'); badge.setAttribute('class','threat-badge'); const rect=document.createElementNS(NS,'rect'); rect.setAttribute('x',bx-12); rect.setAttribute('y',by-10); rect.setAttribute('width',24); rect.setAttribute('height',20); rect.setAttribute('rx',6); rect.setAttribute('fill','#ef4444'); rect.setAttribute('stroke','#000'); rect.setAttribute('stroke-width','2'); const txt=document.createElementNS(NS,'text'); txt.setAttribute('x',bx); txt.setAttribute('y',by+5); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.setAttribute('fill','#0b0f14'); txt.textContent=String(faces[0]); badge.appendChild(rect); badge.appendChild(txt); g.appendChild(badge); }
   };
   window.App = App; window.addEventListener('DOMContentLoaded',()=>App.init());
