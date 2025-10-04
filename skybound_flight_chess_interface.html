@@ -118,9 +118,9 @@
               <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:8px">
                 <fieldset>
                   <legend>起飛</legend>
-                  <label><input type="radio" name="takeoff" value="six" checked> 擲 6 才起飛</label>
+                  <label><input type="radio" name="takeoff" value="six"> 擲 6 才起飛</label>
                   <label><input type="radio" name="takeoff" value="fiveOrSix"> 擲 5 或 6</label>
-                  <label><input type="radio" name="takeoff" value="even"> 擲偶數</label>
+                  <label><input type="radio" name="takeoff" value="even" checked> 擲偶數</label>
                 </fieldset>
                 <fieldset>
                   <legend>連擲 / 懲罰</legend>
@@ -355,7 +355,7 @@
     };
 
     const DEFAULT_RULES = {
-      takeoff:"six", extraTurnOnSix:true, tripleSixPenalty:false,
+      takeoff:"even", extraTurnOnSix:true, tripleSixPenalty:false,
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
       homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
@@ -626,7 +626,21 @@
       this.$.btnQuick.addEventListener('click',()=>{ this.applyPreset('classic'); this.startGame(); });
       this.$.btnContinue.addEventListener('click',()=>this.continueFromSave());
       this.$.btnLobby.addEventListener('click',()=>this.toLobby());
-      this.$.btnRoll.addEventListener('click',()=>this.rollDice('mouse'));
+      this.$.btnRoll.addEventListener('click',event=>{
+        const isKeyboardActivation = (event instanceof MouseEvent && event.detail===0) || event?.detail===0;
+        if(isKeyboardActivation){
+          this.rollDice('keyboard');
+          return;
+        }
+        if(event instanceof PointerEvent){
+          const pointerType = event.pointerType;
+          if(pointerType==='mouse' || pointerType==='pen'){
+            this.rollDice('mouse');
+            return;
+          }
+        }
+        this.rollDice('mouse');
+      });
       this.$.btnUndo.addEventListener('click',()=>this.undo());
       this.$.btnRestart.addEventListener('click',()=>this.restartGame());
       if(this.$.playerList){
@@ -985,7 +999,7 @@
       this.updateBoardOverlay();
     },
     applyPreset(name){
-      if(name==='classic') this.state.rules = this.cloneDefaultRules();
+      if(name==='classic') this.state.rules = this.cloneDefaultRules({takeoff:'six'});
       else if(name==='fast') this.state.rules = this.cloneDefaultRules({takeoff:'fiveOrSix'});
       else this.state.rules = this.cloneDefaultRules();
       this.applyBoardDefaultsToRules();
@@ -1007,7 +1021,7 @@
     readRulesFromForm(){
       const f=this.$.formSetup; const chk=n=>!!f.querySelector(`[name="${n}"]`)?.checked; const val=n=>f.querySelector(`[name="${n}"]:checked`)?.value; const num=(n,d)=>{const x=parseInt(f.querySelector(`[name="${n}"]`)?.value??d,10); return isNaN(x)?d:x;};
       return {
-        takeoff: val('takeoff')||'six', extraTurnOnSix:chk('extraTurnOnSix'), tripleSixPenalty:chk('tripleSixPenalty'),
+        takeoff: val('takeoff')||'even', extraTurnOnSix:chk('extraTurnOnSix'), tripleSixPenalty:chk('tripleSixPenalty'),
         captureOnLand:chk('captureOnLand'), stackEnabled:chk('stackEnabled'), stackMovesTogether:chk('stackMovesTogether'), blockadePassThrough:chk('blockadePassThrough'),
         ownColorJump:{enabled:chk('ownColorJumpEnabled'),steps:num('ownColorJumpSteps',4)}, dashedFlight:{enabled:chk('dashedFlightEnabled'),captureOnLanding:chk('captureOnFlight')},
         homeLaneExactEntry:chk('homeLaneExactEntry'), finishExact:(f.querySelector('[name="finishExact"]')?.value)||'exact',
