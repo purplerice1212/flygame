@@ -30,8 +30,13 @@
     .list{display:flex;flex-wrap:wrap;gap:8px}
     .pill{border:1px solid #334155;border-radius:999px;padding:6px 10px}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    .board-wrap{aspect-ratio:1/1;background:#0a0a0a;border-radius:16px;border:1px solid #1f2937;display:grid;place-items:center}
-    svg.board{width:100%;height:100%;max-width:min(80vh,880px)}
+    .board-wrap{position:relative;aspect-ratio:1/1;background:#0a0a0a;border-radius:16px;border:1px solid #1f2937;display:grid;place-items:center;overflow:hidden}
+    #board-overlay{position:absolute;inset:0;padding:24px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:600;color:rgba(226,232,240,0.92);background:rgba(15,23,42,0.72);backdrop-filter:blur(2px);border-radius:inherit;opacity:0;pointer-events:none;transition:opacity .22s ease}
+    body[data-view="lobby"] #board-overlay{opacity:1}
+    svg.board{width:100%;height:100%;max-width:min(75vh,820px)}
+    @media(max-width:959px){
+      svg.board{max-width:min(92vw,640px)}
+    }
     .log{height:200px;overflow:auto;border-radius:12px;background:#0b0f14;border:1px solid #1f2937;padding:8px}
     fieldset{border:1px solid #334155;border-radius:12px;padding:12px}
     legend{padding:0 8px}
@@ -47,6 +52,16 @@
     #toast-host{pointer-events:none;min-height:26px}
     .toast-message{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;margin-top:6px;border-radius:999px;background:rgba(34,211,238,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 14px rgba(8,47,73,0.3);opacity:0;transform:translateY(-4px);transition:opacity .18s ease,transform .22s ease}
     .toast-message[data-show="true"]{opacity:1;transform:translateY(0)}
+    body[data-view="lobby"] #view-game aside{opacity:.4;pointer-events:none}
+    #specials-legend{border:1px solid #1f2937;border-radius:12px;padding:12px;background:rgba(15,23,42,0.6)}
+    #specials-legend ul{margin:8px 0 0 0;padding-left:0;display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:#e2e8f0;list-style:none}
+    #specials-legend li{display:flex;align-items:center;gap:6px}
+    #specials-legend .legend-icon{display:inline-flex;width:1.4rem;align-items:center;justify-content:center;margin-right:4px}
+    #specials-legend .status-line{font-size:.85rem;margin:0;color:#a1a9ba}
+    #specials-legend[data-disabled="true"]{opacity:.5}
+    #specials-legend[data-disabled="true"] [data-specials-status]{color:#f87171}
+    #specials-legend[data-disabled="false"] [data-specials-status]{color:#34d399}
+    body[data-view="game"] #view-game aside{opacity:1;pointer-events:auto}
     @media(prefers-reduced-motion:reduce){
       #turn-banner{transition:opacity .1s ease;transform:none}
       .toast-message{transition:opacity .1s ease;transform:none}
@@ -127,6 +142,11 @@
                   <label><input type="checkbox" name="captureOnFlight" checked> 飛行落點吃子</label>
                 </fieldset>
                 <fieldset>
+                  <legend>特殊格</legend>
+                  <label><input type="checkbox" name="specialsEnabled" checked> 啟用傳送門／增益／陷阱</label>
+                  <p class="muted" style="margin:4px 0 0">順序：跳格 → 飛行 → 傳送門 → 增益 → 陷阱</p>
+                </fieldset>
+                <fieldset>
                   <legend>終點</legend>
                   <label><input type="checkbox" name="homeLaneExactEntry" checked> 入家路要精準</label>
                   <label>
@@ -165,7 +185,7 @@
     </section>
 
     <!-- 2) Game / Board View -->
-    <section id="view-game" class="board-area" hidden aria-labelledby="title-game">
+    <section id="view-game" class="board-area" aria-labelledby="title-game">
       <h2 id="title-game" class="sr-only">對局</h2>
 
       <div class="card board-wrap" role="application" aria-label="棋盤">
@@ -178,6 +198,7 @@
           <g id="layer-pieces"></g>
           <g id="layer-highlights"></g>
         </svg>
+        <div id="board-overlay" aria-hidden="true"></div>
       </div>
 
       <aside class="card" aria-label="回合控制">
@@ -186,8 +207,8 @@
           <span id="timer" class="muted" aria-live="polite"></span>
         </div>
         <div class="row" style="margin-top:8px">
-          <button class="btn" id="btn-roll" aria-live="assertive" aria-label="擲骰">擲骰 🎲</button>
-          <output id="dice-output" aria-live="polite" class="pill">–</output>
+          <button class="btn" id="btn-roll" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
+          <output id="dice-output" aria-live="polite" class="pill" role="status">–</output>
         </div>
         <div id="toast-host" aria-live="polite"></div>
         <div id="hint-card" aria-live="polite"></div>
@@ -203,6 +224,16 @@
           <button class="btn" id="btn-undo">Undo</button>
           <button class="btn" id="btn-restart">重開局</button>
         </div>
+        <section id="specials-legend" aria-label="特殊格圖例" style="margin-top:12px">
+          <h3 class="section-title" style="font-size:1rem">特殊格圖例</h3>
+          <p class="muted status-line">特殊格目前：<span data-specials-status>啟用</span></p>
+          <ul>
+            <li><span class="legend-icon">🌀</span>傳送門：瞬移至配對點（每次落地最多 1 次）</li>
+            <li><span class="legend-icon">🎲</span>增壓：獲得額外擲骰或增益移動</li>
+            <li><span class="legend-icon">⚠️</span>亂流：下回合停飛一輪</li>
+          </ul>
+          <p class="muted" style="margin-top:6px">結算順序：自色跳格 → 飛行 → 傳送門 → 增益 → 陷阱</p>
+        </section>
       </aside>
     </section>
   </main>
@@ -277,16 +308,16 @@
 
   <!-- 5) App Script -->
   <script>
-  // ========================= Rules Engine (Part 2) =========================
+  // =========================== Rules Engine ============================
   (function(){
-    const BOARD = {
-      boardSpecVersion: "classic-52-v1",
+      const BOARD = {
+        boardSpecVersion: "skybound-variant-v2",
       track: { length: 52, orderClockwise: ["red","blue","yellow","green"], startIndex: { red:0, blue:13, yellow:26, green:39 } },
       homeLane: { length: 6, entryIndex: { red:50, blue:11, yellow:24, green:37 } },
       special: {
         safeTiles: {
           start:true,
-          extra:[3,16,29,42]
+          extra:[3,9,16,22,29,35,42,48]
         },
         powerTiles:[
           {idx:5,effect:'extra-roll',label:'🎲'},
@@ -327,12 +358,14 @@
       takeoff:"six", extraTurnOnSix:true, tripleSixPenalty:false,
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
-      homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[3,16,29,42]},
+      homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
+      specials:{enabled:true,portalLimit:1},
       turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
     };
 
     const mod = (n,m)=>((n%m)+m)%m;
     const clone = (x)=> (window.structuredClone? structuredClone(x) : JSON.parse(JSON.stringify(x)));
+    const SPECIAL_RESOLUTION_ORDER = Object.freeze(['own-color-jump','flight','portal','power-up','trap']);
 
     const Pos = {
       base:(slot=0)=>({kind:'base',slot}),
@@ -420,9 +453,9 @@
             if(!(allyCount>0 && !rules.stackEnabled) && !(enemyCount>=2 && !rules.blockadePassThrough)){
               const events=[]; let final=Pos.track(destIdx);
               const special=resolveSpecialsAfterLanding(player,final,rules,occ,events);
-              final=special.final; const eventLog=special.events;
+              final=special.final; const eventLog=special.events; const effectsLog=special.effects||[];
               const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight});
-              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,capture,stack:[i]});
+              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i]});
             }
           }
           return;
@@ -430,7 +463,7 @@
         const sim = simulateMove(player,pos,dice,rules,occ);
         if(sim && sim.legal){
           const group = stackGroup?stackGroup.slice():[i];
-          moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,capture:sim.capture,stack:group});
+          moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,effects:sim.effects||[],capture:sim.capture,stack:group});
         }
       });
       return moves;
@@ -472,20 +505,24 @@
         }
       }
       let capture=null;
+      let specialEffects=[];
       if(current.kind==='track'){
         const special=resolveSpecialsAfterLanding(player,current,rules,occ,events);
-        current=special.final; events=special.events;
+        current=special.final; events=special.events; specialEffects=special.effects||[];
         capture=resolveCaptureOnTrack(player,current,rules,occ,{viaFlight:special.viaFlight});
         if(capture?.blocked) return {legal:false,reason:'land-on-enemy-blockade',events};
       } else if(current.kind==='home'){
         if(current.idx===BOARD.homeLane.length-1){ current=Pos.finished(); events.push({type:'finish'}); }
       }
-      return {legal:true,final:current,events,capture};
+      return {legal:true,final:current,events,capture,effects:specialEffects};
     }
 
     function resolveSpecialsAfterLanding(player,pos,rules,occ,events){
+      // The order of resolution is fixed (see SPECIAL_RESOLUTION_ORDER):
+      // own-colour jump → flight → limited portal hops → power-ups → traps.
       let current=clone(pos);
       let viaFlight=false;
+      const effects=[];
       if(rules.ownColorJump.enabled && current.kind==='track' && isOwnJumpTile(player.color,current.idx)){
         const target = mod(current.idx + rules.ownColorJump.steps, BOARD.track.length);
         current = Pos.track(target); events.push({type:'jump',from:pos.idx,to:target});
@@ -496,22 +533,33 @@
         const to = flightTo(player.color,current.idx);
         if(to!=null){ current=Pos.track(to); events.push({type:'flight',from:pos.idx,to}); viaFlight=true; }
       }
+      const specialsConfig = rules.specials||{};
+      const specialsActive = specialsConfig.enabled!==false;
+      const portalLimit = Math.max(0, specialsConfig.portalLimit ?? 1);
       const portalLookup=new Map((BOARD.special.portals||[]).map(p=>[p.from,p]));
       const visitedPortals=new Set();
-      while(current.kind==='track'){
+      let portalCount=0;
+      while(specialsActive && current.kind==='track'){
         const portal = portalLookup.get(current.idx);
-        if(!portal || visitedPortals.has(current.idx)) break;
+        if(!portal || visitedPortals.has(current.idx) || portalCount>=portalLimit) break;
         visitedPortals.add(current.idx);
+        portalCount+=1;
         current=Pos.track(portal.to);
         events.push({type:'portal',label:portal.label,from:portal.from,to:portal.to});
       }
-      if(current.kind==='track'){
+      if(specialsActive && current.kind==='track'){
         const power = (BOARD.special.powerTiles||[]).find(p=>p.idx===current.idx);
-        if(power) events.push({type:'power-up',effect:power.effect,label:power.label,idx:power.idx});
+        if(power){
+          const detail={type:'power-up',effect:power.effect,label:power.label,idx:power.idx};
+          events.push(detail); effects.push(detail);
+        }
         const trap = (BOARD.special.trapTiles||[]).find(t=>t.idx===current.idx);
-        if(trap) events.push({type:'trap',effect:trap.effect,label:trap.label,idx:trap.idx});
+        if(trap){
+          const detail={type:'trap',effect:trap.effect,label:trap.label,idx:trap.idx};
+          events.push(detail); effects.push(detail);
+        }
       }
-      return {final:current,events,viaFlight};
+      return {final:current,events,viaFlight,effects};
     }
 
     function resolveCaptureOnTrack(player,pos,rules,occ,context={}){
@@ -527,61 +575,34 @@
       return {captured};
     }
 
-    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith };
+    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith, SPECIAL_RESOLUTION_ORDER };
 
-    // ------------ Dev Console Smoke Tests -------------
-    (function devTests(){
-      const players=[{id:'P1',name:'Mandy',color:'red'},{id:'P2',name:'Brian',color:'blue'}];
-      const mkBasePieces=()=>Array.from({length:BOARD.bases.perPlayer},(_,i)=>({pos:Pos.base(i)}));
-      const basePieces={P1:mkBasePieces(),P2:mkBasePieces()};
-      const state={turn:'P1',players,pieces:clone(basePieces)}; const rules=DEFAULT_RULES;
-      console.log('[Test] 起飛(6) 應有步：', generateLegalMoves(state,rules,6));
-      state.pieces.P1[0].pos = Pos.track(BOARD.track.startIndex.red);
-      let occ = buildOccupancy(state); console.log('[Test] 從起點走2：', simulateMove(players[0], state.pieces.P1[0].pos, 2, rules, occ));
-      // 新增：吃子測試
-      state.pieces.P2[0].pos = Pos.track((BOARD.track.startIndex.red+2)%BOARD.track.length);
-      occ = buildOccupancy(state); console.log('[Test] 可否吃子：', generateLegalMoves(state,rules,2));
-      // 新增：入家路/完成測試（構造接近終點）
-      state.turn='P1'; state.pieces.P1[0].pos = Pos.home(4); // homeLen=6, 走2應到終點
-      occ = buildOccupancy(state); console.log('[Test] 終點精準：', simulateMove(players[0], state.pieces.P1[0].pos, 2, rules, occ));
-    })();
+    // (Tests removed in production build)
   })();
   // ========================= End Rules Engine =========================
   </script>
 
   <script>
   // =============================== App ================================
-  (function ensureUniqueIds(){
-    const used=new Set();
-    document.querySelectorAll('[id]').forEach(el=>{
-      if(!el.id) return;
-      if(!used.has(el.id)){
-        used.add(el.id);
-        return;
-      }
-      const base=el.id;
-      let suffix=2;
-      let candidate=`${base}-${suffix}`;
-      while(used.has(candidate)){
-        suffix+=1;
-        candidate=`${base}-${suffix}`;
-      }
-      console.warn?.(`[ensureUniqueIds] duplicated id "${base}" renamed to "${candidate}"`);
-      el.id=candidate;
-      used.add(candidate);
-    });
-  })();
+  const SAVE_KEY='ac_save_v1';
+  const SAVE_VERSION='skybound-variant-v2';
   const App = {
     state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{} },
     geom:{ track:[], home:{}, bases:{} },
     init(){
       if(this._initialized) return;
       this._initialized=true;
-      this.cache(); this.bind(); this.renderLobbyPlayers(2);
+      this.cache(); this.bind();
+      this.state.rules=this.cloneDefaultRules();
+      this.applyBoardDefaultsToRules();
+      this.renderLobbyPlayers(2);
       this.bootstrapBoard();
-      this.toGame();
-      if(localStorage.getItem('ac_save_v1')) this.$.btnContinue.disabled=false;
-      this.autoLaunch();
+      this.redrawPieces();
+      this.updateViewVisibility();
+      this.updateBoardOverlay();
+      this.updateSpecialsLegend();
+      if(this.hasSavedGame()) this.$.btnContinue.disabled=false;
+      window.addEventListener('resize',()=>this.onResize());
     },
     cache(){
       this.$={
@@ -589,9 +610,13 @@
         formSetup:$('#form-setup'), btnQuick:$('#btn-quick'), btnStart:$('#btn-start'), btnLobby:$('#btn-lobby'), btnRoll:$('#btn-roll'),
         diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'), hintCard:$('#hint-card'), turnBanner:$('#turn-banner'), toast:$('#toast-host'),
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
-        gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights')
+        gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
+        boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]')
       };
       function $(sel){ return document.querySelector(sel); }
+    },
+    hasSavedGame(){
+      try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
     },
     bind(){
       if(this._bound) return;
@@ -604,10 +629,86 @@
       this.$.btnRoll.addEventListener('click',()=>this.rollDice('mouse'));
       this.$.btnUndo.addEventListener('click',()=>this.undo());
       this.$.btnRestart.addEventListener('click',()=>this.restartGame());
+      if(this.$.playerList){
+        this.$.playerList.addEventListener('change',evt=>{
+          const target=evt.target;
+          if(!target || typeof target.matches!=='function') return;
+          if(target.matches('[data-color]')){
+            const card=target.closest('[data-player-card]');
+            this.syncPlayerCardColor(card);
+          }
+        });
+      }
       $('#btn-settings').addEventListener('click',()=>$('#dialog-settings').showModal());
       $('#btn-about').addEventListener('click',()=>$('#dialog-about').showModal());
       this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); this.updateControlAssignments(); this.renderHints(); this.updateTurnPrompt(true); });
       document.addEventListener('keydown',e=>this.onKey(e));
+    },
+    updateViewVisibility(){
+      const view=this.state.view||'lobby';
+      document.body.dataset.view=view;
+      if(this.$?.viewLobby) this.$.viewLobby.hidden = (view!=='lobby');
+      if(this.$?.viewGame) this.$.viewGame.hidden = false;
+    },
+    updateBoardOverlay(){
+      const overlay=this.$?.boardOverlay; if(!overlay) return;
+      const view=this.state.view||'lobby';
+      if(view==='game'){ overlay.textContent=''; return; }
+      if(this.hasSavedGame()){
+        overlay.textContent='🗺️ 棋盤預覽 — 有儲存對局，可按「繼續上局」或重新開局';
+        return;
+      }
+      let configured=this.$?.playerList?.querySelectorAll('[data-player-card]').length||0;
+      if(configured===0 && Array.isArray(this.state.players)) configured=this.state.players.length;
+      if(configured>=2){
+        overlay.textContent=`🗺️ 棋盤預覽 — ${configured} 位玩家準備就緒，按「開始遊戲」起飛`;
+      }else{
+        overlay.textContent='🗺️ 棋盤預覽 — 需至少 2 位玩家開始';
+      }
+    },
+    syncPlayerCardColor(card){
+      if(!card) return;
+      const colorSelect=card.querySelector('[data-color]');
+      const pill=card.querySelector('[data-color-pill]');
+      if(!colorSelect) return;
+      const value=colorSelect.value||'';
+      card.dataset.color=value;
+      if(pill){
+        const label=(colorSelect.options && colorSelect.selectedIndex>=0)?(colorSelect.options[colorSelect.selectedIndex]?.textContent||''):'●';
+        const trimmed=(label||'').trim();
+        const displayLabel=trimmed.length?trimmed:'●';
+        pill.textContent=displayLabel;
+        pill.setAttribute('aria-label',`顏色：${trimmed.length?trimmed:'未設定'}`);
+        if(value){
+          pill.style.background=`var(--${value})`;
+          pill.style.color='#0b0f14';
+          pill.style.borderColor=`var(--${value})`;
+        }else{
+          pill.style.background='';
+          pill.style.color='';
+          pill.style.borderColor='';
+        }
+      }
+    },
+    refreshPlayerCardColors(){
+      const cards=this.$?.playerList?.querySelectorAll('[data-player-card]');
+      if(!cards) return;
+      cards.forEach(card=>this.syncPlayerCardColor(card));
+    },
+    updateSpecialsLegend(){
+      const legend=this.$?.specialsLegend; if(!legend) return;
+      const enabled=!(this.state.rules?.specials?.enabled===false);
+      legend.dataset.disabled=enabled?'false':'true';
+      const statusEl=this.$?.specialsStatus; if(statusEl) statusEl.textContent=enabled?'啟用':'停用';
+      if(this.$?.gSpecials) this.$.gSpecials.style.opacity=enabled?'1':'0.25';
+    },
+    onResize(){
+      if(this._resizeTimer){ clearTimeout(this._resizeTimer); }
+      this._resizeTimer=setTimeout(()=>{
+        this.bootstrapBoard();
+        this.redrawPieces();
+        this._resizeTimer=null;
+      },160);
     },
     lockInput(ms=0){
       if(this._inputUnlockTimer){ clearTimeout(this._inputUnlockTimer); this._inputUnlockTimer=null; }
@@ -628,13 +729,21 @@
     updateControlAssignments(){
       const mode=this.state.settings.keyboardMode||'shared';
       const map={};
+      const fallbackFor=(targetMode,idx)=>{
+        if(targetMode==='dual') return (idx<=1?'keyboard':'mouse');
+        if(targetMode==='shared') return 'keyboard';
+        if(targetMode==='custom') return 'keyboard';
+        return 'mouse';
+      };
       this.state.players.forEach((player,idx)=>{
+        if(!player || !player.id) return;
         const pref=(player.control==='keyboard'||player.control==='mouse')?player.control:'auto';
+        if(mode==='custom'){
+          map[player.id]=(pref==='auto')?fallbackFor('shared',idx):pref;
+          return;
+        }
         if(pref==='keyboard'||pref==='mouse'){ map[player.id]=pref; return; }
-        if(mode==='shared'){ map[player.id]='keyboard'; }
-        else if(mode==='dual'){ map[player.id]=(idx<=1?'keyboard':'mouse'); }
-        else if(mode==='custom'){ map[player.id]='keyboard'; }
-        else { map[player.id]='mouse'; }
+        map[player.id]=fallbackFor(mode,idx);
       });
       this.state.controlById=map;
     },
@@ -755,20 +864,6 @@
       if(msg) this.showTurnPrompt(msg,{force,duration:2200,lock});
       else this.showTurnPrompt('',{force:true});
     },
-    autoLaunch(){
-      if(this._autoLaunched) return;
-      this._autoLaunched=true;
-      requestAnimationFrame(()=>{
-        const saved=this.loadGame();
-        if(saved){
-          this._pendingToast='已載入上局，繼續作戰！';
-          this.continueFromSave(saved);
-        }else{
-          this._pendingToast='已快速開始經典對局';
-          this.startGame();
-        }
-      });
-    },
     log(message){
       const host=this.$?.log; if(!host) return;
       const entry=document.createElement('div');
@@ -861,30 +956,40 @@
       this.renderHints();
       this.updateTurnPrompt();
     },
+    cloneDefaultRules(extra={}){
+      const base=window.GameRules?.DEFAULT_RULES||{};
+      const copy=(window.structuredClone? structuredClone(base) : JSON.parse(JSON.stringify(base)));
+      return Object.assign(copy,extra||{});
+    },
     renderLobbyPlayers(n){
-      const host=this.$.playerList; host.innerHTML='';
+      const host=this.$.playerList; if(!host) return; host.innerHTML='';
       const colors=['red','blue','yellow','green'];
       for(let i=0;i<n;i++){
-        const tpl=document.getElementById('tpl-player-card'); const node=tpl.content.cloneNode(true);
-        node.querySelector('[data-idx]').textContent=i+1;
-        node.querySelector('[data-name]').value = i===0?'Mandy':(i===1?'Brian':'');
-        node.querySelector('[data-color]').value = colors[i%colors.length];
-        node.querySelector('[data-type]').value = (i<2?'human':'ai');
-        const controlSelect=node.querySelector('[data-control]');
+        const tpl=document.getElementById('tpl-player-card'); const fragment=tpl.content.cloneNode(true);
+        const card=fragment.querySelector('[data-player-card]');
+        const idxLabel=fragment.querySelector('[data-idx]');
+        if(idxLabel) idxLabel.textContent=i+1;
+        const nameInput=fragment.querySelector('[data-name]');
+        if(nameInput) nameInput.value = i===0?'Mandy':(i===1?'Brian':'');
+        const colorValue=colors[i%colors.length];
+        const colorSelect=fragment.querySelector('[data-color]');
+        if(colorSelect) colorSelect.value=colorValue;
+        const typeSelect=fragment.querySelector('[data-type]');
+        if(typeSelect) typeSelect.value = (i<2?'human':'ai');
+        if(card) card.dataset.color=colorValue;
+        const controlSelect=fragment.querySelector('[data-control]');
         if(controlSelect){ controlSelect.value='auto'; }
-        host.appendChild(node);
+        host.appendChild(fragment);
       }
+      this.refreshPlayerCardColors();
+      this.updateBoardOverlay();
     },
     applyPreset(name){
-      const cloneRules=(extra={})=>{
-        const base=window.GameRules.DEFAULT_RULES;
-        const copy = (window.structuredClone? structuredClone(base) : JSON.parse(JSON.stringify(base)));
-        return Object.assign(copy,extra);
-      };
-      if(name==='classic') this.state.rules = cloneRules();
-      else if(name==='fast') this.state.rules = cloneRules({takeoff:'fiveOrSix'});
-      else this.state.rules = cloneRules();
+      if(name==='classic') this.state.rules = this.cloneDefaultRules();
+      else if(name==='fast') this.state.rules = this.cloneDefaultRules({takeoff:'fiveOrSix'});
+      else this.state.rules = this.cloneDefaultRules();
       this.applyBoardDefaultsToRules();
+      this.updateSpecialsLegend();
     },
     applyBoardDefaultsToRules(){
       if(!this.state.rules) return;
@@ -893,6 +998,11 @@
       const merged=new Set([...(safeRaw.list||[]), ...extras]);
       const safe={ start:(safeRaw.start!==false), list:Array.from(merged).sort((a,b)=>a-b) };
       this.state.rules.safeTiles=safe;
+      const specialsRaw=this.state.rules.specials||{};
+      const specials=Object.assign({},specialsRaw);
+      if(typeof specials.portalLimit!=='number' || Number.isNaN(specials.portalLimit)) specials.portalLimit=1;
+      if(typeof specials.enabled!=='boolean') specials.enabled=true;
+      this.state.rules.specials=specials;
     },
     readRulesFromForm(){
       const f=this.$.formSetup; const chk=n=>!!f.querySelector(`[name="${n}"]`)?.checked; const val=n=>f.querySelector(`[name="${n}"]:checked`)?.value; const num=(n,d)=>{const x=parseInt(f.querySelector(`[name="${n}"]`)?.value??d,10); return isNaN(x)?d:x;};
@@ -902,6 +1012,7 @@
         ownColorJump:{enabled:chk('ownColorJumpEnabled'),steps:num('ownColorJumpSteps',4)}, dashedFlight:{enabled:chk('dashedFlightEnabled'),captureOnLanding:chk('captureOnFlight')},
         homeLaneExactEntry:chk('homeLaneExactEntry'), finishExact:(f.querySelector('[name="finishExact"]')?.value)||'exact',
         safeTiles:{start:chk('startTileSafe'),list:[]},
+        specials:{enabled:chk('specialsEnabled'),portalLimit:1},
         turnTimerSec:Math.max(0,num('turnTimerSec',0)),
         animSpeed:(()=>{ const raw=(f.querySelector('[name="animSpeed"]')?.value)||'normal'; return ['slow','normal','fast'].includes(raw)?raw:'normal'; })(),
         undoEnabled:chk('undoEnabled')
@@ -946,7 +1057,7 @@
       this.state.pendingBonus=null;
       this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
-      if(preset==='custom'){ this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES, this.readRulesFromForm()); this.applyBoardDefaultsToRules(); }
+      if(preset==='custom'){ this.state.rules = this.cloneDefaultRules(this.readRulesFromForm()); this.applyBoardDefaultsToRules(); }
       else { this.applyPreset(preset); }
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       for(const p of players){
@@ -968,8 +1079,20 @@
       this.maybeAutoPlayIfAI();
       this.$.btnContinue.disabled=false;
     },
-    toGame(){ this.$.viewLobby.hidden=true; this.$.viewGame.hidden=false; this.state.view='game'; },
-    toLobby(){ this.$.viewLobby.hidden=false; this.$.viewGame.hidden=true; this.state.view='lobby'; this.clearTurnTimer(); },
+    toGame(){
+      this.state.view='game';
+      this.updateViewVisibility();
+      this.updateBoardOverlay();
+      this.updateSpecialsLegend();
+    },
+    toLobby(){
+      this.state.view='lobby';
+      this.updateViewVisibility();
+      this.updateBoardOverlay();
+      this.updateSpecialsLegend();
+      this.clearTurnTimer();
+      this.refreshPlayerCardColors();
+    },
 
     restartGame(){
       if(!Array.isArray(this.state.players) || this.state.players.length<2){
@@ -1011,6 +1134,7 @@
       this._pendingToast=null;
       this.maybeAutoPlayIfAI();
       this.$.btnContinue.disabled=false;
+      this.updateSpecialsLegend();
     },
 
     rollDice(source='system'){
@@ -1021,6 +1145,18 @@
       if(this.state.dice!=null){ this.log('本回合已擲骰'); return; }
       const player=this.currentPlayer();
       if(!player){ return; }
+      const skipRemaining=Math.max(0,this.state.skipTurns?.[player.id]||0);
+      if(skipRemaining>0){
+        this.state.skipTurns[player.id]=skipRemaining-1;
+        this.log(`${player.name} 因亂流停飛，跳過此回合擲骰`);
+        this.showToast(`${player.name} 暫停一回合`,1200);
+        this.state.legalMoves=[];
+        this.highlightMovables();
+        this.renderHints();
+        this.updateTurnPrompt(true);
+        this.advanceTurn();
+        return;
+      }
       const value=1+Math.floor(Math.random()*6);
       this.state.dice=value;
       this.$.diceOut.textContent=String(value);
@@ -1064,6 +1200,7 @@
       const gGrid=this.$.gGrid,gTiles=this.$.gTiles,gSpecials=this.$.gSpecials,gPieces=this.$.gPieces,gHL=this.$.gHL; gGrid.innerHTML=gTiles.innerHTML=gSpecials.innerHTML=gPieces.innerHTML=gHL.innerHTML='';
       const NS='http://www.w3.org/2000/svg'; const css=getComputedStyle(document.documentElement); const color=(name)=>css.getPropertyValue(name).trim();
       const geom=this.geom={track:[],home:{},bases:{},runway:{}};
+      const isCompact=window.matchMedia('(max-width: 959px)').matches;
       const el=(n,a={},ch=[])=>{ const node=document.createElementNS(NS,n); for(const [k,v] of Object.entries(a)) node.setAttribute(k,v); ch.forEach(c=>node.appendChild(c)); return node; };
       const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
       const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
@@ -1106,33 +1243,38 @@
         defs.appendChild(pattern); jumpPatterns[col]=pattern; return pattern;
       };
       const ownJumpLookup={}; Object.entries(ownJump).forEach(([col,arr])=>arr.forEach(idx=>{ ownJumpLookup[idx]=col; }));
-      const tileSize=44;
+      const tileSize=isCompact?40:44;
       for(let i=0;i<total;i++){
         const {x,y,angle}=ringPoint(i); geom.track[i]={x,y,angle};
         const attrs={x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:'transparent',stroke:color('--tile-grid'),'stroke-width':2};
         const jumpCol=ownJumpLookup[i];
-        if(!jumpCol && safeExtras.has(i)){ attrs.fill='rgba(148,163,184,0.18)'; attrs.stroke='rgba(148,163,184,0.65)'; }
+        if(!jumpCol && safeExtras.has(i)){ attrs.fill='rgba(148,163,184,0.22)'; attrs.stroke='rgba(226,232,240,0.75)'; attrs['stroke-width']=3; }
         if(jumpCol){ const hex=color(`--${jumpCol}`); attrs.fill=mixWithWhite(hex,0.15); attrs['fill-opacity']=0.9; attrs.stroke=withAlpha(hex,0.6); attrs['stroke-width']=2.5; }
         gTiles.appendChild(el('rect',attrs));
         if(jumpCol){ ensureJumpPattern(jumpCol); gTiles.appendChild(el('rect',{x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:`url(#jump-${jumpCol})`,opacity:0.5})); }
+        if(!jumpCol && safeExtras.has(i)){
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.38,stroke:'rgba(226,232,240,0.85)','stroke-width':2.6,'stroke-dasharray':'5 4',fill:'none',opacity:.88}));
+        }
         const power=powerLookup.get(i);
         if(power){
           const accent=color('--accent');
-          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.32,fill:withAlpha(accent,0.18),stroke:accent,'stroke-width':2.4}));
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.34,fill:withAlpha(accent,0.2),stroke:accent,'stroke-width':3.1}));
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.5,fill:'none',stroke:withAlpha(accent,0.38),'stroke-width':1.7,'stroke-dasharray':'6 6'}));
           const label=document.createTextNode(power.label||'⚡');
           gSpecials.appendChild(el('text',{x, y:y+5, 'text-anchor':'middle','font-size':'16','font-weight':'700','fill':accent},[label]));
         }
         const trap=trapLookup.get(i);
         if(trap){
           const red=color('--red');
-          gSpecials.appendChild(el('rect',{x:x-tileSize*0.32,y:y-tileSize*0.32,width:tileSize*0.64,height:tileSize*0.64,rx:10,fill:withAlpha(red,0.18),stroke:withAlpha(red,0.6),'stroke-width':2.2}));
+          gSpecials.appendChild(el('rect',{x:x-tileSize*0.32,y:y-tileSize*0.32,width:tileSize*0.64,height:tileSize*0.64,rx:10,fill:withAlpha(red,0.2),stroke:withAlpha(red,0.72),'stroke-width':2.6}));
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.48,fill:'none',stroke:withAlpha(red,0.45),'stroke-width':1.8,'stroke-dasharray':'4 3'}));
           const label=document.createTextNode(trap.label||'⚠');
           gSpecials.appendChild(el('text',{x, y:y+5, 'text-anchor':'middle','font-size':'16','font-weight':'700','fill':red},[label]));
         }
         const portal=portalLookup.get(i);
         if(portal){
           const accent=color('--accent');
-          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.34,fill:withAlpha(accent,0.16),stroke:accent,'stroke-width':2.4,'stroke-dasharray':'6 4'}));
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:tileSize*0.36,fill:withAlpha(accent,0.2),stroke:accent,'stroke-width':3,'stroke-dasharray':'6 4'}));
           const label=document.createTextNode(portal.label||'🌀');
           gSpecials.appendChild(el('text',{x, y:y+5, 'text-anchor':'middle','font-size':'15','font-weight':'700','fill':accent},[label]));
         }
@@ -1143,7 +1285,7 @@
           const points=Array.from(set).map(idx=>geom.track[idx]).filter(Boolean);
           if(points.length>=2){
             const [p1,p2]=points;
-            portalLines.appendChild(el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:color('--accent'),'stroke-dasharray':'8 6','stroke-width':2}));
+            portalLines.appendChild(el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:color('--accent'),'stroke-dasharray':'8 6','stroke-width':3,'stroke-linecap':'round',opacity:.7}));
             const mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
             const labelNode=document.createTextNode(`🌀${label}`);
             portalLines.appendChild(el('text',{x:mid.x,y:mid.y-8,'text-anchor':'middle','font-size':'12','font-weight':'600','fill':color('--accent')},[labelNode]));
@@ -1216,15 +1358,19 @@
       });
       gGrid.appendChild(el('rect',{x:cx-60,y:cy-60,width:120,height:120,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:color('--tile-grid'),'stroke-width':2}));
       gSpecials.appendChild(el('polygon',{points:starPoints(cx,cy,70,28),fill:withAlpha(color('--accent'),0.16),stroke:color('--accent'),'stroke-width':2.4}));
-      const baseDefs={red:{dx:-350,dy:-350},blue:{dx:350,dy:-350},yellow:{dx:350,dy:350},green:{dx:-350,dy:350}};
+      const baseOffset=isCompact?300:350;
+      const baseSize=isCompact?150:180;
+      const slotOffset=isCompact?32:40;
+      const slotRadius=isCompact?18:22;
+      const baseDefs={red:{dx:-baseOffset,dy:-baseOffset},blue:{dx:baseOffset,dy:-baseOffset},yellow:{dx:baseOffset,dy:baseOffset},green:{dx:-baseOffset,dy:baseOffset}};
       const runwayGroup=el('g',{});
       const runwayLength=4;
       for(const [col,{dx,dy}] of Object.entries(baseDefs)){
         const group=el('g',{});
-        const x=cx+dx,y=cy+dy,w=180,h=180;
-        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:22,fill:`var(--${col})`,opacity:.14,stroke:`var(--${col})`,'stroke-width':2}));
+        const x=cx+dx,y=cy+dy,w=baseSize,h=baseSize;
+        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:isCompact?18:22,fill:`var(--${col})`,opacity:.14,stroke:`var(--${col})`,'stroke-width':2}));
         const slots=[];
-        for(let i=-1;i<=1;i+=2){ for(let j=-1;j<=1;j+=2){ const sx=x+i*40,sy=y+j*40; slots.push({x:sx,y:sy}); group.appendChild(el('circle',{cx:sx,cy:sy,r:22,fill:'none',stroke:`var(--${col})`,'stroke-width':2,opacity:.8})); } }
+        for(let i=-1;i<=1;i+=2){ for(let j=-1;j<=1;j+=2){ const sx=x+i*slotOffset,sy=y+j*slotOffset; slots.push({x:sx,y:sy}); group.appendChild(el('circle',{cx:sx,cy:sy,r:slotRadius,fill:'none',stroke:`var(--${col})`,'stroke-width':2,opacity:.8})); } }
         geom.bases[col]=slots;
         const startTile=geom.track[startIdx[col]];
         if(startTile){
@@ -1468,42 +1614,9 @@
           this.log(`${player.name} 疊子合體移動（${movingPieces.length} 枚）`);
         }
 
-        let extraTurnFromEvent=false;
-        let pendingBonusRequest=null;
-        if(move.events){
-          move.events.forEach(ev=>{
-            if(ev.type==='enter-home') this.log(`${player.name} 進入家路`);
-            else if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
-            else if(ev.type==='flight') this.log(`${player.name} 走飛線`);
-            else if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
-            else if(ev.type==='portal'){
-              const label=ev.label?` ${ev.label}`:'';
-              this.log(`${player.name} 穿越傳送門${label}`);
-              this.showToast(`🌀 傳送門${label||''}！` ,1200);
-            }
-            else if(ev.type==='power-up'){
-              if(ev.effect==='extra-roll'){
-                extraTurnFromEvent=true;
-                this.log(`${player.name} 拿到增擲機會！`);
-                this.showToast('🎲 加擲機會！',1400);
-              }else if(ev.effect==='advance-2'){
-                pendingBonusRequest=pendingBonusRequest||{dice:2,restrict:'same',pieceIndex:leadEntry.idx,description:'向前再飛 2 格',source:'power-up',autoResolve:true};
-                this.log(`${player.name} 動力提升，準備再飛 2 格`);
-              }else if(ev.effect==='command-other'){
-                pendingBonusRequest={dice:1,restrict:'others',pieceIndex:leadEntry.idx,description:'指揮另一架飛機前進 1 格',source:'power-up',autoResolve:false};
-                this.log(`${player.name} 獲得指揮權，可讓另一架棋子前進 1 格`);
-              }
-            }
-            else if(ev.type==='trap'){
-              if(ev.effect==='skip-turn'){
-                const currentSkip=Math.max(0,this.state.skipTurns[player.id]||0);
-                this.state.skipTurns[player.id]=currentSkip+1;
-                this.log(`${player.name} 遭遇亂流，下一回合將停飛`);
-                this.showToast('⚠️ 亂流！下回合停飛',1600);
-              }
-            }
-          });
-        }
+        const effectsOutcome=this.applySpecialEffects({player,move,leadIndex:leadEntry.idx});
+        const extraTurnFromEvent=!!effectsOutcome.extraTurn;
+        let pendingBonusRequest=effectsOutcome.pendingBonus;
 
         this.redrawPieces();
         this.$.gHL.innerHTML='';
@@ -1567,6 +1680,54 @@
           this.maybeAutoPlayIfAI();
         }
       });
+    },
+    applySpecialEffects({player,move,leadIndex}){
+      const outcome={extraTurn:false,pendingBonus:null};
+      const events=Array.isArray(move?.events)?move.events:[];
+      events.forEach(ev=>{
+        if(ev.type==='enter-home') this.log(`${player.name} 進入家路`);
+        else if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
+        else if(ev.type==='flight') this.log(`${player.name} 走飛線`);
+        else if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
+        else if(ev.type==='portal'){
+          const label=ev.label?` ${ev.label}`:'';
+          this.log(`${player.name} 穿越傳送門${label}`);
+          this.showToast(`🌀 傳送門${label||''}！`,1200);
+        }
+        else if(ev.type==='power-up'){
+          if(ev.effect==='extra-roll'){
+            this.log(`${player.name} 拿到增擲機會！`);
+            this.showToast('🎲 加擲機會！',1400);
+          }else if(ev.effect==='advance-2'){
+            this.log(`${player.name} 動力提升，準備再飛 2 格`);
+          }else if(ev.effect==='command-other'){
+            this.log(`${player.name} 獲得指揮權，可讓另一架棋子前進 1 格`);
+          }
+        }
+        else if(ev.type==='trap'){
+          if(ev.effect==='skip-turn'){
+            this.log(`${player.name} 遭遇亂流，下一回合將停飛`);
+            this.showToast('⚠️ 亂流！下回合停飛',1600);
+          }
+        }
+      });
+      const effects=Array.isArray(move?.effects)?move.effects:[];
+      effects.forEach(effect=>{
+        if(effect.type==='power-up'){
+          if(effect.effect==='extra-roll'){
+            outcome.extraTurn=true;
+          }else if(effect.effect==='advance-2'){
+            if(!outcome.pendingBonus){ outcome.pendingBonus={dice:2,restrict:'same',pieceIndex:leadIndex??move.pieceIndex,description:'向前再飛 2 格',source:'power-up',autoResolve:true}; }
+          }else if(effect.effect==='command-other'){
+            outcome.pendingBonus={dice:1,restrict:'others',pieceIndex:leadIndex??move.pieceIndex,description:'指揮另一架飛機前進 1 格',source:'power-up',autoResolve:false};
+          }
+        }else if(effect.type==='trap' && effect.effect==='skip-turn'){
+          if(!this.state.skipTurns) this.state.skipTurns={};
+          const currentSkip=Math.max(0,this.state.skipTurns[player.id]||0);
+          this.state.skipTurns[player.id]=currentSkip+1;
+        }
+      });
+      return outcome;
     },
     advanceTurn(){
       if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
@@ -1638,22 +1799,42 @@
 
     // --------- Persistence / Undo ---------
     snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules,dice:this.state.dice,consecutiveSixes:this.state.consecutiveSixes,skipTurns:this.state.skipTurns,bonusSelecting:this.state.bonusSelecting,pendingBonus:this.state.pendingBonus})); },
-    saveGame(){ try{ localStorage.setItem('ac_save_v1', JSON.stringify(this.snapshot())); }catch(e){} },
-    loadGame(){ try{ const s=localStorage.getItem('ac_save_v1'); return s?JSON.parse(s):null; }catch(e){ return null; } },
-    clearSave(){ try{ localStorage.removeItem('ac_save_v1'); }catch(e){} },
+    saveGame(){
+      if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
+      const payload={version:SAVE_VERSION, board:window.GameRules?.BOARD?.boardSpecVersion, state:this.snapshot()};
+      try{
+        localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+        if(this.$?.btnContinue) this.$.btnContinue.disabled=false;
+      }catch(e){}
+    },
+    loadGame(){
+      try{
+        const raw=localStorage.getItem(SAVE_KEY);
+        if(!raw) return null;
+        const parsed=JSON.parse(raw);
+        if(parsed && typeof parsed==='object' && parsed.state){ return parsed; }
+        return {version:'legacy', state:parsed};
+      }catch(e){ return null; }
+    },
+    clearSave(){
+      try{ localStorage.removeItem(SAVE_KEY); if(this.$?.btnContinue) this.$.btnContinue.disabled=true; }catch(e){}
+      this.updateBoardOverlay();
+    },
     continueFromSave(data=null){
-      const snapshot=data||this.loadGame();
-      if(!snapshot){ this.log('冇儲存對局'); return; }
+      const payload=data||this.loadGame();
+      if(!payload){ this.log('冇儲存對局'); return; }
+      const snapshot=payload.state||payload;
       this.state.players=snapshot.players||[];
       this.normalizePlayerControls();
       this.state.pieces=snapshot.pieces||{};
       this.state.turn=snapshot.turn||null;
-      const loadedRules=snapshot.rules? Object.assign({}, window.GameRules.DEFAULT_RULES, snapshot.rules) : window.GameRules.DEFAULT_RULES;
+      const loadedRules=snapshot.rules? this.cloneDefaultRules(snapshot.rules) : this.cloneDefaultRules();
       this.state.rules=loadedRules;
       this.applyBoardDefaultsToRules();
       this.state.dice=snapshot.dice??null;
       this.state.consecutiveSixes=snapshot.consecutiveSixes||{};
       this.state.skipTurns=snapshot.skipTurns||{};
+      this.state.players.forEach(p=>{ if(this.state.skipTurns[p.id]==null) this.state.skipTurns[p.id]=0; });
       this.state.bonusSelecting=!!snapshot.bonusSelecting;
       this.state.pendingBonus=snapshot.pendingBonus||null;
       this.state.history=[];
@@ -1678,6 +1859,8 @@
       if(toastMsg) this.showToast(toastMsg);
       this._pendingToast=null;
       if(this.$?.btnContinue) this.$.btnContinue.disabled=false;
+      this.updateSpecialsLegend();
+      this.updateBoardOverlay();
       this.maybeAutoPlayIfAI();
     },
     pushHistory(){
@@ -1703,6 +1886,7 @@
       this.updateTurnUI();
       this.saveGame();
       this.log('已撤銷一步');
+      this.updateSpecialsLegend();
       this.maybeAutoPlayIfAI();
     },
 
