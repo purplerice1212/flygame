@@ -1,0 +1,1418 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>飛行棋 Aeroplane Chess</title>
+  <!-- UI: choose either Tailwind CDN or your own CSS. Keep as comment for now. -->
+  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0f172a;--fg:#e5e7eb;--muted:#94a3b8;--accent:#38bdf8;--card:#111827}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--fg)}
+    .container{max-width:1200px;margin:0 auto;padding:16px}
+    .app-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:14px;border:1px solid #1f2937;background:#111827;color:#e5e7eb;cursor:pointer}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .grid{display:grid;gap:16px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:16px}
+    .board-area{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:960px){.board-area{grid-template-columns:1fr 320px}}
+    .section-title{font-weight:800;margin:0 0 8px}
+    .muted{color:var(--muted)}
+    .list{display:flex;flex-wrap:wrap;gap:8px}
+    .pill{border:1px solid #334155;border-radius:999px;padding:6px 10px}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    /* SVG board sizing */
+    .board-wrap{aspect-ratio:1/1;background:#0b1220;border-radius:16px;border:1px solid #1f2937;display:grid;place-items:center}
+    svg.board{width:100%;height:100%;max-width:min(80vh,800px)}
+    .log{height:200px;overflow:auto;border-radius:12px;background:#0b1220;border:1px solid #1f2937;padding:8px}
+    /* simple form styles */
+    fieldset{border:1px solid #334155;border-radius:12px;padding:12px}
+    legend{padding:0 8px}
+    label{display:flex;align-items:center;gap:8px}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
+      :root{--bg:#0a0a0a;--fg:#e5e7eb;--muted:#9ca3af;--accent:#33ccff;--card:#0b0f14;
+      /* Theme B: C-colors + D-background */
+      --tile-grid:#374151;--tile-safe:#1f2937;--tile-special:#0e7490;
+      --red:#ff5c8a;--blue:#33ccff;--yellow:#ffd633;--green:#66ffb2;
+      --red-ghost:#7f2c42;--blue-ghost:#1b4a5a;--yellow-ghost:#7a6a1a;--green-ghost:#2a5f49;
+    }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--fg)}
+    .container{max-width:1200px;margin:0 auto;padding:16px}
+    .app-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:14px;border:1px solid #1f2937;background:#111827;color:#e5e7eb;cursor:pointer}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .grid{display:grid;gap:16px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:16px}
+    .board-area{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:960px){.board-area{grid-template-columns:1fr 320px}}
+    .section-title{font-weight:800;margin:0 0 8px}
+    .muted{color:var(--muted)}
+    .list{display:flex;flex-wrap:wrap;gap:8px}
+    .pill{border:1px solid #334155;border-radius:999px;padding:6px 10px}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    /* SVG board sizing */
+    .board-wrap{aspect-ratio:1/1;background:#0a0a0a;border-radius:16px;border:1px solid #1f2937;display:grid;place-items:center}
+    svg.board{width:100%;height:100%;max-width:min(80vh,880px)}
+    .log{height:200px;overflow:auto;border-radius:12px;background:#0b0f14;border:1px solid #1f2937;padding:8px}
+    /* simple form styles */
+    fieldset{border:1px solid #334155;border-radius:12px;padding:12px}
+    legend{padding:0 8px}
+    label{display:flex;align-items:center;gap:8px}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
+  </style>
+</head>
+<body>
+  <header class="container app-bar" role="banner">
+    <div class="row" aria-label="brand">
+      <strong>✈️ 飛行棋</strong>
+      <span class="muted">MVP</span>
+    </div>
+    <nav aria-label="global">
+      <button class="btn" id="btn-lobby">返回大廳</button>
+      <button class="btn" id="btn-settings" aria-haspopup="dialog" aria-controls="dialog-settings">設定</button>
+      <button class="btn" id="btn-about" aria-haspopup="dialog" aria-controls="dialog-about">說明</button>
+    </nav>
+  </header>
+
+  <main class="container" id="app" role="main">
+    <!-- 1) Lobby / Setup -->
+    <section id="view-lobby" class="grid" aria-labelledby="title-lobby">
+      <h1 id="title-lobby" class="section-title">大廳／開局設定</h1>
+      <div class="card">
+        <form id="form-setup" aria-describedby="setup-help">
+          <p id="setup-help" class="muted">選擇玩家、顏色、規則。按「開始遊戲」。</p>
+
+          <fieldset>
+            <legend>玩家</legend>
+            <div class="row">
+              <label>人數
+                <select name="playerCount" id="playerCount" aria-label="玩家人數">
+                  <option value="2" selected>2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+            </div>
+            <div id="player-list" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+              <!-- Player cards generated by JS -->
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>規則預設</legend>
+            <div class="row">
+              <label><input type="radio" name="preset" value="classic" checked> 經典</label>
+              <label><input type="radio" name="preset" value="fast"> 速戰</label>
+              <label><input type="radio" name="preset" value="custom"> 自訂</label>
+            </div>
+            <details id="rules-advanced">
+              <summary>自訂規則（展開）</summary>
+              <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:8px">
+                <fieldset>
+                  <legend>起飛</legend>
+                  <label><input type="radio" name="takeoff" value="six" checked> 擲 6 才起飛</label>
+                  <label><input type="radio" name="takeoff" value="fiveOrSix"> 擲 5 或 6</label>
+                  <label><input type="radio" name="takeoff" value="even"> 擲偶數</label>
+                </fieldset>
+                <fieldset>
+                  <legend>連擲 / 懲罰</legend>
+                  <label><input type="checkbox" name="extraTurnOnSix" checked> 擲 6 可再擲</label>
+                  <label><input type="checkbox" name="tripleSixPenalty"> 三連 6 懲罰</label>
+                </fieldset>
+                <fieldset>
+                  <legend>吃子 / 堵路</legend>
+                  <label><input type="checkbox" name="captureOnLand" checked> 落點吃子</label>
+                  <label><input type="checkbox" name="stackEnabled" checked> 自家疊子</label>
+                  <label><input type="checkbox" name="stackMovesTogether"> 疊子合體移動</label>
+                  <label><input type="checkbox" name="blockadePassThrough"> 允許穿越堵路</label>
+                </fieldset>
+                <fieldset>
+                  <legend>捷徑</legend>
+                  <label><input type="checkbox" name="ownColorJumpEnabled" checked> 自色跳格</label>
+                  <label>跳幾格 <input type="number" min="1" max="6" name="ownColorJumpSteps" value="4"></label>
+                  <label><input type="checkbox" name="dashedFlightEnabled" checked> 虛線飛行</label>
+                  <label><input type="checkbox" name="captureOnFlight" checked> 飛行落點吃子</label>
+                </fieldset>
+                <fieldset>
+                  <legend>終點</legend>
+                  <label><input type="checkbox" name="homeLaneExactEntry" checked> 入家路要精準</label>
+                  <label>
+                    完成規則
+                    <select name="finishExact">
+                      <option value="exact" selected>剛好到達</option>
+                      <option value="noMoveIfOver">超出不得前進</option>
+                      <option value="bounceBack">超出折返</option>
+                    </select>
+                  </label>
+                </fieldset>
+                <fieldset>
+                  <legend>其他</legend>
+                  <label><input type="checkbox" name="startTileSafe" checked> 起飛格安全</label>
+                  <label>動畫速度
+                    <select name="animSpeed">
+                      <option value="slow">慢</option>
+                      <option value="normal" selected>正常</option>
+                      <option value="fast">快</option>
+                    </select>
+                  </label>
+                  <label>回合計時（秒）<input type="number" name="turnTimerSec" min="0" value="0"></label>
+                  <label><input type="checkbox" name="undoEnabled" checked> 允許 Undo</label>
+                </fieldset>
+              </div>
+            </details>
+          </fieldset>
+
+          <div class="row" style="margin-top:12px">
+            <button type="submit" class="btn" id="btn-start">開始遊戲</button>
+            <button type="button" class="btn" id="btn-quick">快速開始（經典）</button>
+            <button type="button" class="btn" id="btn-continue" disabled>繼續上局</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 2) Game / Board View -->
+    <section id="view-game" class="board-area" hidden aria-labelledby="title-game">
+      <h2 id="title-game" class="sr-only">對局</h2>
+
+      <div class="card board-wrap" role="application" aria-label="棋盤">
+        <!-- SVG Board (generated by JS) -->
+        <svg class="board" viewBox="0 0 1000 1000" role="img" aria-label="Aeroplane Chess Board">
+          <desc>棋盤會用程式動態產生：外圈路徑、飛線、顏色區域與家路。</desc>
+          <g id="layer-grid"></g>
+          <g id="layer-tiles"></g>
+          <g id="layer-specials"></g>
+          <g id="layer-pieces"></g>
+          <g id="layer-highlights"></g>
+        </svg>
+      </div>
+
+      <aside class="card" aria-label="回合控制">
+        <div class="row" style="justify-content:space-between">
+          <strong id="turn-indicator">當前：—</strong>
+          <span id="timer" class="muted" aria-live="polite"></span>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="btn-roll" aria-live="assertive" aria-label="擲骰">擲骰 🎲</button>
+          <output id="dice-output" aria-live="polite" class="pill">–</output>
+        </div>
+        <div style="margin-top:12px">
+          <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
+          <div id="movables" class="list" aria-live="polite"></div>
+        </div>
+        <div style="margin-top:12px">
+          <h3 class="section-title" style="font-size:1rem">戰報</h3>
+          <div id="log" class="log" role="log" aria-live="polite"></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="btn-undo">Undo</button>
+          <button class="btn" id="btn-restart">重開局</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <!-- 3) Dialogs -->
+  <dialog id="dialog-settings" aria-labelledby="dialog-settings-title">
+    <form method="dialog" class="card" style="min-width:320px">
+      <h3 id="dialog-settings-title" class="section-title">設定</h3>
+      <label>鍵盤控制
+        <select id="keyboard-mode">
+          <option value="shared" selected>共享模式：1–4 選棋、Space 擲骰</option>
+          <option value="dual">雙人熱座：P1=1–4、P2=7–0</option>
+        </select>
+      </label>
+      <label>主題
+        <select id="theme">
+          <option value="dark" selected>深色</option>
+          <option value="light">淺色</option>
+          <option value="high">高對比</option>
+        </select>
+      </label>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" value="cancel">關閉</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dialog-about" aria-labelledby="dialog-about-title">
+    <form method="dialog" class="card" style="min-width:320px">
+      <h3 id="dialog-about-title" class="section-title">說明</h3>
+      <p class="muted">在同一裝置上輪流操作的本地多人飛行棋。支援規則自訂與續盤。</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" value="cancel">知道了</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 4) Templates (for cloning) -->
+  <template id="tpl-player-card">
+    <div class="card" data-player-card>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <strong>玩家 <span data-idx></span></strong>
+        <span class="pill" data-color-pill>●</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>名稱 <input type="text" data-name placeholder="Mandy / Brian" /></label>
+        <label>顏色
+          <select data-color>
+            <option value="red">紅</option>
+            <option value="blue">藍</option>
+            <option value="yellow">黃</option>
+            <option value="green">綠</option>
+          </select>
+        </label>
+        <label>類型
+          <select data-type>
+            <option value="human" selected>人類</option>
+            <option value="ai">AI</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </template>
+
+  <!-- 5) App Script (skeleton only) -->
+  <script>
+  // ===== App State (skeleton) =====
+  // App singleton
+  const App = {
+    state: {
+      view: 'lobby',
+      players: [],
+      rules: {},
+      game: null, // game state snapshot
+    },
+    init(){
+      this.cache();
+      this.bind();
+      this.state.settings = { keyboardMode: 'shared' };
+      this.renderLobbyPlayers(2);
+      // enable Continue if there is a save
+      if(localStorage.getItem('ac_save_v1')){
+        this.$.btnContinue.disabled = false;
+      }
+    };
+      this.bind();
+      this.renderLobbyPlayers(2); // default 2 players
+    },
+    cache(){
+      this.$ = {
+        viewLobby: document.getElementById('view-lobby'),
+        viewGame: document.getElementById('view-game'),
+        playerCount: document.getElementById('playerCount'),
+        playerList: document.getElementById('player-list'),
+        formSetup: document.getElementById('form-setup'),
+        btnQuick: document.getElementById('btn-quick'),
+        btnStart: document.getElementById('btn-start'),
+        btnLobby: document.getElementById('btn-lobby'),
+        btnRoll: document.getElementById('btn-roll'),
+        diceOut: document.getElementById('dice-output'),
+        movables: document.getElementById('movables'),
+        log: document.getElementById('log'),
+        turn: document.getElementById('turn-indicator'),
+        kbMode: document.getElementById('keyboard-mode'),
+        btnUndo: document.getElementById('btn-undo'),
+        btnRestart: document.getElementById('btn-restart'),
+        btnContinue: document.getElementById('btn-continue'),
+      };
+    },
+    bind(){
+      this.$.playerCount.addEventListener('change', e=>{
+        this.renderLobbyPlayers(parseInt(e.target.value,10));
+      });
+      this.$.formSetup.addEventListener('submit', e=>{
+        e.preventDefault();
+        this.startGame();
+      });
+      this.$.btnQuick.addEventListener('click', e=>{
+        this.applyPreset('classic');
+        this.startGame();
+      });
+      this.$.btnContinue.addEventListener('click', ()=>{
+        this.continueFromSave();
+      });
+      this.$.btnLobby.addEventListener('click', ()=>this.toLobby());
+      this.$.btnRoll.addEventListener('click', ()=>{ this.rollDice(); });
+      this.$.btnUndo.addEventListener('click', ()=> this.undo());
+      this.$.btnRestart.addEventListener('click', ()=>{ this.clearSave(); this.toLobby(); });
+      document.getElementById('btn-settings').addEventListener('click',()=>document.getElementById('dialog-settings').showModal());
+      document.getElementById('btn-about').addEventListener('click',()=>document.getElementById('dialog-about').showModal());
+      this.$.kbMode.addEventListener('change',(e)=>{
+        this.state.settings.keyboardMode = e.target.value;
+        this.log(`鍵盤模式：${this.state.settings.keyboardMode}`);
+      });
+      document.addEventListener('keydown', (e)=> this.onKey(e));
+    });
+      this.$.formSetup.addEventListener('submit', e=>{
+        e.preventDefault();
+        this.startGame();
+      });
+      this.$.btnQuick.addEventListener('click', e=>{
+        this.applyPreset('classic');
+        this.startGame();
+      });
+      this.$.btnLobby.addEventListener('click', ()=>this.toLobby());
+      this.$.btnRoll.addEventListener('click', ()=>{
+        this.rollDice();
+      });
+        this.$.diceOut.textContent = v;
+        // TODO: integrate rules + move generation
+      });
+      document.getElementById('btn-settings').addEventListener('click',()=>document.getElementById('dialog-settings').showModal());
+      document.getElementById('btn-about').addEventListener('click',()=>document.getElementById('dialog-about').showModal());
+      this.$.kbMode.addEventListener('change',(e)=>{
+        this.state.settings.keyboardMode = e.target.value;
+        this.log(`鍵盤模式：${this.state.settings.keyboardMode}`);
+      });
+      document.addEventListener('keydown', (e)=> this.onKey(e));
+    },
+    renderLobbyPlayers(n){
+      const host = this.$.playerList; host.innerHTML = '';
+      const colorCycle = ['red','blue','yellow','green'];
+      for(let i=0;i<n;i++){
+        const tpl = document.getElementById('tpl-player-card');
+        const node = tpl.content.cloneNode(true);
+        node.querySelector('[data-idx]').textContent = i+1;
+        node.querySelector('[data-name]').value = i===0? 'Mandy' : (i===1? 'Brian' : '');
+        node.querySelector('[data-color]').value = colorCycle[i%colorCycle.length];
+        node.querySelector('[data-type]').value = (i<2? 'human':'ai'); // 預設前兩個人類，其餘 AI
+        host.appendChild(node);
+      }
+    }
+    }
+    },
+    applyPreset(name){
+      // TODO: map UI to rules JSON; for now, keep defaults
+      this.state.rules = window.GameRules.DEFAULT_RULES;
+    },
+    startGame(){
+      // collect players from form
+      const cards = this.$.playerList.querySelectorAll('[data-player-card]');
+      const players=[]; const seenColors=new Set();
+      cards.forEach((card,idx)=>{
+        const name=card.querySelector('[data-name]').value || `玩家${idx+1}`;
+        const color=card.querySelector('[data-color]').value;
+        const type=card.querySelector('[data-type]').value || 'human';
+        if(seenColors.has(color)) return; // avoid dup color simple guard
+        seenColors.add(color);
+        players.push({ id:`P${idx+1}`, name, color, type });
+      });
+      if(players.length<2){ this.log('至少需要 2 位玩家'); return; }
+      this.state.players = players;
+      this.state.turn = players[0].id;
+      this.state.rules = this.state.rules || window.GameRules.DEFAULT_RULES;
+      this.state.history = [];
+      // init pieces
+      this.state.pieces = {};
+      for(const p of players){
+        this.state.pieces[p.id] = [1,2,3,4].map(()=>({ pos: window.GameRules.Pos.base() }));
+      }
+      this.state.legalMoves = [];
+      this.toGame();
+      this.bootstrapBoard();
+      this.redrawPieces();
+      this.updateTurnUI();
+      this.saveGame();
+      this.log('遊戲開始！');
+      if(localStorage){ this.$.btnContinue.disabled = false; }
+      this.maybeAutoPlayIfAI();
+    },
+    toGame(){
+      this.$.viewLobby.hidden = true;
+      this.$.viewGame.hidden = false;
+      this.state.view = 'game';
+    },
+    toLobby(){
+      this.$.viewLobby.hidden = false;
+      this.$.viewGame.hidden = true;
+      this.state.view = 'lobby';
+    },
+    bootstrapBoard(){
+      const svg = document.querySelector('svg.board');
+      const W=1000,H=1000; svg.setAttribute('viewBox','0 0 '+W+' '+H);
+      const cx=W/2, cy=H/2; const r=380; // ring radius
+
+      const gGrid = document.getElementById('layer-grid');
+      const gTiles = document.getElementById('layer-tiles');
+      const gSpecials = document.getElementById('layer-specials');
+      const gPieces = document.getElementById('layer-pieces');
+      const gHL = document.getElementById('layer-highlights');
+      gGrid.innerHTML=''; gTiles.innerHTML=''; gSpecials.innerHTML=''; gPieces.innerHTML=''; gHL.innerHTML='';
+
+      // Helpers
+      const NS='http://www.w3.org/2000/svg';
+      const css = getComputedStyle(document.documentElement);
+      const color = (name)=>css.getPropertyValue(name).trim();
+
+      const geom = this.geom = { track:[], home:{}, bases:{} };
+
+      function el(name, attrs={}, children=[]) {
+        const n = document.createElementNS(NS, name);
+        for(const [k,v] of Object.entries(attrs)) n.setAttribute(k,v);
+        for(const c of children) n.appendChild(c);
+        return n;
+      }
+      function ringPoint(i, total=GameRules.BOARD.track.length) {
+        const a = (Math.PI*2) * (i/total) - Math.PI/2; // start at top
+        const kx = Math.cos(a), ky = Math.sin(a);
+        const rx = r * (0.85 + 0.15*Math.pow(Math.sin(a*2),2));
+        const ry = r * (0.85 + 0.15*Math.pow(Math.cos(a*2),2));
+        return [cx + kx*rx, cy + ky*ry];
+      }
+
+      // Background ring
+      gGrid.appendChild(el('circle',{cx,cy,r:r+60,fill:'#0a0a0a',stroke:color('--tile-grid'),'stroke-width':2,opacity:0.5}));
+
+      // Draw 52 tiles and record coords
+      const total = GameRules.BOARD.track.length;
+      const startIdx = GameRules.BOARD.track.startIndex;
+      const entryIdx = GameRules.BOARD.homeLane.entryIndex;
+      const ownJump = GameRules.BOARD.special.ownColorJump.indices;
+
+      const colorByIdx = (idx)=>{
+        if(ownJump.red.includes(idx)) return 'var(--red-ghost)';
+        if(ownJump.blue.includes(idx)) return 'var(--blue-ghost)';
+        if(ownJump.yellow.includes(idx)) return 'var(--yellow-ghost)';
+        if(ownJump.green.includes(idx)) return 'var(--green-ghost)';
+        return 'transparent';
+      };
+
+      for(let i=0;i<total;i++){
+        const [x,y]=ringPoint(i); geom.track[i]={x,y};
+        const s=44; const rect=el('rect',{x:x-s/2,y:y-s/2,width:s,height:s,rx:10,fill:colorByIdx(i),stroke:color('--tile-grid'),'stroke-width':2});
+        gTiles.appendChild(rect);
+        if(Object.values(entryIdx).includes(i)){
+          const p=el('path',{d:`M ${x-10} ${y} l 10 -8 l 0 16 Z M ${x+6} ${y} l 10 -8 l 0 16 Z`,fill:'#e5e7eb',opacity:0.8});
+          gSpecials.appendChild(p);
+        }
+        if(Object.values(startIdx).includes(i)){
+          const c=el('circle',{cx:x,cy:y,r:10,fill:'#e5e7eb'});
+          gSpecials.appendChild(c);
+        }
+      }
+
+      // Flight arrows
+      const flights = GameRules.BOARD.special.flightPaths.edges;
+      for(const [colorKey,edges] of Object.entries(flights)){
+        for(const e of edges){
+          const {x:x1,y:y1}=geom.track[e.from]; const {x:x2,y:y2}=geom.track[e.to];
+          const mx=(x1+x2)/2, my=(y1+y2)/2;
+          const path=el('path',{d:`M ${x1} ${y1} Q ${mx} ${my-80} ${x2} ${y2}`,stroke:`var(--${colorKey})`,'stroke-width':4,fill:'none',opacity:0.7});
+          const arrow=el('polygon',{points:`${x2},${y2} ${x2-6},${y2-14} ${x2+6},${y2-14}`,fill:`var(--${colorKey})`,opacity:0.9});
+          gSpecials.appendChild(path); gSpecials.appendChild(arrow);
+        }
+      }
+
+      // Home lanes geometry
+      const lanes=[
+        {color:'red',   angle:-90},
+        {color:'blue',  angle:0},
+        {color:'yellow',angle:90},
+        {color:'green', angle:180},
+      ];
+      const laneLen = GameRules.BOARD.homeLane.length;
+      lanes.forEach(L=>{
+        const ang=L.angle*Math.PI/180; const ux=Math.cos(ang), uy=Math.sin(ang);
+        const baseR=r-30; const step=48; geom.home[L.color]=[];
+        for(let i=0;i<laneLen;i++){
+          const x=cx+ux*(baseR - i*step); const y=cy+uy*(baseR - i*step);
+          geom.home[L.color][i]={x,y};
+          const s=44; const fill=i===laneLen-1? `var(--${L.color})` : 'transparent';
+          const stroke=i===laneLen-1? `var(--${L.color})` : color('--tile-grid');
+          const rect=el('rect',{x:x-s/2,y:y-s/2,width:s,height:s,rx:10,fill,stroke,'stroke-width':2});
+          gTiles.appendChild(rect);
+        }
+      });
+
+      // Center home diamond
+      const dSize=120; const home=el('rect',{x:cx-dSize/2,y:cy-dSize/2,width:dSize,height:dSize,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:color('--tile-grid'),'stroke-width':2});
+      gGrid.appendChild(home);
+
+      // Bases with slots geometry
+      const baseDefs={ red:{dx:-350,dy:-350}, blue:{dx:350,dy:-350}, yellow:{dx:350,dy:350}, green:{dx:-350,dy:350} };
+      for(const [col,{dx,dy}] of Object.entries(baseDefs)){
+        const group=el('g',{});
+        const x=cx + dx, y=cy + dy; const w=180,h=180; const rxy=22;
+        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:rxy,fill:`var(--${col})`,opacity:.08,stroke:`var(--${col})`,'stroke-width':2}));
+        const slots=[]; let k=0;
+        for(let i=-1;i<=1;i+=2){
+          for(let j=-1;j<=1;j+=2){
+            const sx=x+i*40, sy=y+j*40; slots.push({x:sx,y:sy});
+            group.appendChild(el('circle',{cx:sx, cy:sy, r:22, fill:'none', stroke:`var(--${col})`, 'stroke-width':2, opacity:.8}));
+            k++;
+          }
+        }
+        geom.bases[col]=slots; gGrid.appendChild(group);
+      }
+
+      // Subtle vignette
+      gGrid.appendChild(el('circle',{cx,cy,r:r+150,fill:'none',stroke:'#000','stroke-width':140,opacity:.35}));
+
+      this.$.svg = svg; this.$.gPieces = gPieces; this.$.gHL = gHL;
+    },
+    log(msg){
+      const div = document.createElement('div');
+      const t = new Date().toLocaleTimeString();
+      div.textContent = `[${t}] ${msg}`;
+      this.$.log.prepend(div);
+    },
+    // ===== Game Flow =====
+    rollDice(){
+      const v = 1 + Math.floor(Math.random()*6);
+      this.$.diceOut.textContent = v;
+      this.state.dice = v;
+      const rules = this.state.rules || window.GameRules.DEFAULT_RULES;
+      const st = { turn:this.state.turn, players:this.state.players, pieces:this.state.pieces };
+      this.state.legalMoves = window.GameRules.generateLegalMoves(st, rules, v);
+      this.highlightMovables();
+      this.log(`${this.currentPlayer().name} 擲到 ${v}`);
+    },
+    currentPlayer(){ return this.state.players.find(p=>p.id===this.state.turn); },
+    updateTurnUI(){ this.$.turn.textContent = `當前：${this.currentPlayer().name}`; },
+    highlightMovables(){
+      const g = this.$.gHL; g.innerHTML='';
+      const moves = this.state.legalMoves || [];
+      const byPiece = new Map();
+      moves.forEach(m=>{ byPiece.set(m.pieceIndex, m); });
+      // Highlight current player's piece slots with labels 1..4
+      const p = this.currentPlayer();
+      const pcs = this.state.pieces[p.id];
+      pcs.forEach((pc,idx)=>{
+        const where = this.posToXY(p.color, pc.pos);
+        if(!where) return;
+        const label = (idx+1).toString();
+        const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        ring.setAttribute('cx', where.x); ring.setAttribute('cy', where.y);
+        ring.setAttribute('r', byPiece.has(idx)? 28:22);
+        ring.setAttribute('fill', byPiece.has(idx)? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)');
+        ring.setAttribute('stroke', byPiece.has(idx)? 'white' : 'transparent');
+        ring.setAttribute('stroke-width', byPiece.has(idx)? '2':'0');
+        g.appendChild(ring);
+        const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x', where.x); txt.setAttribute('y', where.y+4);
+        txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','14'); txt.setAttribute('fill','#e5e7eb');
+        txt.textContent = label;
+        g.appendChild(txt);
+      });
+    },
+    posToXY(color, pos){
+      if(pos.kind==='track') return this.geom.track[pos.idx];
+      if(pos.kind==='home') return this.geom.home[color][pos.idx];
+      if(pos.kind==='base') {
+        // Distribute base pieces among 4 hangar slots for visibility (stable order per draw)
+        if(!this._baseSlotCursor) this._baseSlotCursor = {};
+        const slots = this.geom.bases[color];
+        const idx = this._baseSlotCursor[color] = ((this._baseSlotCursor[color]||-1)+1)%slots.length;
+        return slots[idx];
+      }
+      return null;
+    }
+      return null;
+    },
+    redrawPieces(){
+      const g = this.$.gPieces; g.innerHTML='';
+      // click to move handler (delegate)
+      g.onclick = (e)=>{
+        const t = e.target.closest('circle');
+        if(!t) return;
+        const pid = t?.dataset?.player; const idx = parseInt(t?.dataset?.index||'-1',10);
+        if(pid!==this.state.turn || isNaN(idx)) return;
+        const mv = (this.state.legalMoves||[]).find(m=>m.pieceIndex===idx);
+        if(mv) this.applyMove(mv);
+      };
+      for(const p of this.state.players){
+        const pcs = this.state.pieces[p.id];
+        pcs.forEach((pc,idx)=>{
+          const xy = this.posToXY(p.color, pc.pos); if(!xy) return;
+          const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          c.setAttribute('cx',xy.x); c.setAttribute('cy',xy.y); c.setAttribute('r',18);
+          c.setAttribute('fill', `var(--${p.color})`);
+          c.setAttribute('stroke', '#0b0f14'); c.setAttribute('stroke-width','3');
+          c.dataset.player = p.id; c.dataset.index = idx;
+          this.$.gPieces.appendChild(c);
+          const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x',xy.x); t.setAttribute('y',xy.y+4); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.setAttribute('fill','#0b0f14'); t.textContent = (idx+1);
+          this.$.gPieces.appendChild(t);
+        });
+      }
+    })`);
+          c.setAttribute('stroke', '#0b0f14'); c.setAttribute('stroke-width','3');
+          c.dataset.player = p.id; c.dataset.index = idx;
+          this.$.gPieces.appendChild(c);
+          const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t.setAttribute('x',xy.x); t.setAttribute('y',xy.y+4); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size','12'); t.setAttribute('fill','#0b0f14'); t.textContent = (idx+1);
+          this.$.gPieces.appendChild(t);
+        });
+      }
+    },
+    applyMove(move){
+      // snapshot for Undo
+      this.pushHistory();
+      const pid = this.state.turn; const player = this.currentPlayer();
+      const piece = this.state.pieces[pid][move.pieceIndex];
+      piece.pos = move.to;
+      if(move.capture && move.capture.captured && move.to.kind==='track'){
+        for(const opp of this.state.players){ if(opp.id===pid) continue;
+          this.state.pieces[opp.id].forEach(pc=>{ if(pc.pos.kind==='track' && pc.pos.idx===move.to.idx){ pc.pos = window.GameRules.Pos.base(); }});
+        }
+        if((move.capture.captured||[]).length>0){
+          this.log(`${player.name} 吃子！把對手送回基地`);
+        }
+      }
+      if(move.events){
+        move.events.forEach(ev=>{
+          if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules.ownColorJump.steps})`);
+          if(ev.type==='flight') this.log(`${player.name} 走飛線`);
+          if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
+        });
+      }
+      this.redrawPieces();
+      this.$.gHL.innerHTML='';
+      const again = (this.state.dice===6 && this.state.rules.extraTurnOnSix);
+      if(!again) this.advanceTurn();
+      else { this.updateTurnUI(); this.maybeAutoPlayIfAI(); }
+    }});
+        }
+      }
+      // finish event already encoded by to.kind==='finished'; keep as is
+      this.redrawPieces();
+      this.$.gHL.innerHTML='';
+      const again = (this.state.dice===6 && this.state.rules.extraTurnOnSix);
+      if(!again) this.advanceTurn();
+      this.updateTurnUI();
+    },
+    advanceTurn(){
+      const i = this.state.players.findIndex(p=>p.id===this.state.turn);
+      const next = (i+1)%this.state.players.length;
+      this.state.turn = this.state.players[next].id;
+      this.state.dice = null; this.$.diceOut.textContent='–';
+      this.updateTurnUI();
+      this.saveGame();
+      this.maybeAutoPlayIfAI();
+    },
+    onKey(e){
+      if(this.state.view!=='game') return;
+      const mode = this.state.settings.keyboardMode;
+      const pIdx = this.state.players.findIndex(p=>p.id===this.state.turn);
+      if(e.code==='Space'){ e.preventDefault(); this.rollDice(); return; }
+      if(e.key==='u' || e.key==='U'){ this.undo(); return; }
+      const key = e.key;
+      let selIndex = null;
+      if(mode==='shared'){
+        if(['1','2','3','4'].includes(key)) selIndex = parseInt(key,10)-1;
+      } else if(mode==='dual' && this.state.players.length>=2){
+        if(pIdx===0 && ['1','2','3','4'].includes(key)) selIndex = parseInt(key,10)-1;
+        if(pIdx===1 && ['7','8','9','0'].includes(key)) selIndex = (key==='0'?3:parseInt(key,10)-7);
+      }
+      if(selIndex!=null){
+        const mv = (this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
+        if(mv){ this.applyMove(mv); }
+      }
+    }
+      const key = e.key;
+      let selIndex = null;
+      if(mode==='shared'){
+        if(['1','2','3','4'].includes(key)) selIndex = parseInt(key,10)-1;
+      } else if(mode==='dual' && this.state.players.length>=2){
+        if(pIdx===0 && ['1','2','3','4'].includes(key)) selIndex = parseInt(key,10)-1;
+        if(pIdx===1 && ['7','8','9','0'].includes(key)) selIndex = (key==='0'?3:parseInt(key,10)-7);
+      }
+      if(selIndex!=null){
+        const mv = (this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
+        if(mv){ this.applyMove(mv); }
+      }
+    },
+    // ===== Persistence =====
+    snapshot(){
+      return JSON.parse(JSON.stringify({
+        players:this.state.players,
+        pieces:this.state.pieces,
+        turn:this.state.turn,
+        rules:this.state.rules
+      }));
+    },
+    saveGame(){ try{ localStorage.setItem('ac_save_v1', JSON.stringify(this.snapshot())); }catch(e){} },
+    loadGame(){ try{ const s = localStorage.getItem('ac_save_v1'); return s? JSON.parse(s):null; }catch(e){ return null; } },
+    clearSave(){ try{ localStorage.removeItem('ac_save_v1'); }catch(e){} },
+    continueFromSave(){
+      const data = this.loadGame(); if(!data){ this.log('冇儲存對局'); return; }
+      this.state.players = data.players; this.state.pieces = data.pieces; this.state.turn = data.turn; this.state.rules = data.rules;
+      this.state.history = [];
+      this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI();
+      this.log('已載入上局'); this.maybeAutoPlayIfAI();
+    },
+    // ===== Undo =====
+    pushHistory(){
+      const snap = this.snapshot();
+      this.state.history = [snap]; // 只保留一步 undo（可擴充）
+    },
+    undo(){
+      const snap = this.state.history?.pop?.();
+      if(!snap){ this.log('無可 Undo 嘅步'); return; }
+      this.state.players = snap.players; this.state.pieces = snap.pieces; this.state.turn = snap.turn; this.state.rules = snap.rules;
+      this.state.dice = null; this.$.diceOut.textContent='–';
+      this.redrawPieces(); this.$.gHL.innerHTML=''; this.updateTurnUI();
+      this.saveGame(); this.log('已撤銷一步');
+    },
+    // ===== AI =====
+    isAI(player){ return (player.type||'human')==='ai'; },
+    chooseAIMove(){
+      const player = this.currentPlayer();
+      const moves = this.state.legalMoves || [];
+      if(moves.length===0) return null;
+      const rules = this.state.rules || window.GameRules.DEFAULT_RULES;
+
+      // === Helper: distance to finish (heuristic, lower is better)
+      const distToFinish = (color, pos)=>{
+        const L = window.GameRules.BOARD.track.length;
+        const entry = window.GameRules.BOARD.homeLane.entryIndex[color];
+        const homeLen = window.GameRules.BOARD.homeLane.length;
+        if(pos.kind==='finished') return 0;
+        if(pos.kind==='home') return (homeLen-1 - pos.idx);
+        if(pos.kind==='track'){
+          const dToEntry = ((entry - pos.idx) % L + L) % L; // 0..L-1
+          const stepsIntoHome = 1; // consume 1 step to enter home[0]
+          return dToEntry + stepsIntoHome + (homeLen - 1);
+        }
+        return 999; // base
+      };
+
+      // === Helper: tile safety
+      const isSafeTile = (color, idx)=>{
+        const start = window.GameRules.BOARD.track.startIndex[color];
+        if(rules.safeTiles?.start && idx===start) return true;
+        if(rules.safeTiles?.list && rules.safeTiles.list.includes(idx)) return true;
+        return false;
+      };
+
+      // === Helper: capture risk probability if we land at track idx
+      const captureRiskProb = (color, idx)=>{
+        if(isSafeTile(color, idx)) return 0;
+        let hits = 0; // count dice faces that allow any enemy to land here
+        const L = window.GameRules.BOARD.track.length;
+        for(const opp of this.state.players){ if(opp.id===player.id) continue;
+          const pcs = this.state.pieces[opp.id];
+          for(const pc of pcs){ if(pc.pos.kind!=='track') continue;
+            const d = ((idx - pc.pos.idx) % L + L) % L; // forward distance opp needs
+            if(d>=1 && d<=6) hits += 1;
+          }
+        }
+        const p = Math.min(1, hits/6); // roughly any-face probability (over-approx)
+        return p;
+      };
+
+      // === Score each move
+      const scored = moves.map(m=>{
+        // base score by progress toward finish
+        const beforePos = this.state.pieces[player.id][m.pieceIndex].pos;
+        const beforeDist = distToFinish(player.color, beforePos);
+        const afterDist  = distToFinish(player.color, m.to);
+        let score = 0;
+        const delta = beforeDist - afterDist; // positive if progressing
+        score += delta * 4; // progress weight
+
+        // capture bonus
+        const capN = (m.capture && (m.capture.captured||[]).length) || 0;
+        score += capN * 1000;
+
+        // finish/enter-home bonuses
+        if(m.to.kind==='finished') score += 900;
+        if((m.events||[]).some(e=>e.type==='enter-home')) score += 400;
+
+        // specials
+        if((m.events||[]).some(e=>e.type==='jump')) score += 140;
+        if((m.events||[]).some(e=>e.type==='flight')) score += 90;
+
+        // takeoff slight boost (board presence)
+        if(m.kind==='takeoff') score += 80;
+
+        // landing on safe tile gets a small bonus
+        if(m.to.kind==='track' && isSafeTile(player.color, m.to.idx)) score += 60;
+
+        // danger penalty（被即回合/下回合吃到的機率）
+        if(m.to.kind==='track'){
+          const prob = captureRiskProb(player.color, m.to.idx);
+          score -= prob * 700; // risk weight
+        }
+
+        return { move:m, score, beforeDist, afterDist };
+      });
+
+      // pick the highest score; tie-break: prefer larger delta, then capture count
+      scored.sort((a,b)=>{
+        if(b.score!==a.score) return b.score - a.score;
+        const da=(a.beforeDist-a.afterDist), db=(b.beforeDist-b.afterDist);
+        if(db!==da) return db-da;
+        const ca=((a.move.capture?.captured||[]).length), cb=((b.move.capture?.captured||[]).length);
+        return cb - ca;
+      });
+
+      return scored[0].move;
+    }
+      // 2) 次選：可觸發自色跳格（jump）
+      const jumps = moves.filter(m=> (m.events||[]).some(e=>e.type==='jump'));
+      if(jumps.length>0){
+        return jumps[0];
+      }
+      // 3) 沒有以上：簡單策略—選第一個（可以改進為最接近終點）
+      return moves[0];
+    },
+    maybeAutoPlayIfAI(){
+      const p = this.currentPlayer();
+      if(!this.isAI(p)) return;
+      // small delays for可視化
+      setTimeout(()=>{
+        this.rollDice();
+        setTimeout(()=>{
+          const mv = this.chooseAIMove();
+          if(mv) this.applyMove(mv); else { this.log(`${p.name} 無步可走`); this.advanceTurn(); }
+        }, 400);
+      }, 300);
+    }
+      const key = e.key;
+      let selIndex = null;
+      if(mode==='shared'){
+        if(['1','2','3','4'].includes(key)) selIndex = parseInt(key,10)-1;
+      } else if(mode==='dual' && this.state.players.length===2){
+        if(pIdx===0 && ['1','2','3','4'].includes(key)) selIndex = parseInt(key,10)-1;
+        if(pIdx===1 && ['7','8','9','0'].includes(key)) selIndex = (key==='0'?3:parseInt(key,10)-7);
+      }
+      if(selIndex!=null){
+        const mv = (this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
+        if(mv){ this.applyMove(mv); }
+      }
+    }] ${msg}`;
+      this.$.log.prepend(div);
+    }
+  };
+  // expose globally for later modules/overrides
+  window.App = App;
+  window.addEventListener('DOMContentLoaded',()=>App.init());
+  </script>
+  
+  <!-- Rules Engine Module (Part 2) -->
+  <script type="module">
+    // ===== Part 2: Rules Engine (pure functions) =====
+    // Board model (from Part 1)
+    const BOARD = {
+      boardSpecVersion: "classic-52-v1",
+      track: {
+        length: 52,
+        orderClockwise: ["red", "blue", "yellow", "green"],
+        startIndex: { red: 0, blue: 13, yellow: 26, green: 39 },
+      },
+      homeLane: {
+        length: 6,
+        entryIndex: { red: 50, blue: 11, yellow: 24, green: 37 },
+      },
+      special: {
+        safeTiles: { start: true, extra: [] },
+        ownColorJump: {
+          enabled: true,
+          steps: 4,
+          pattern: "every 4 from (start+2)",
+          indices: {
+            red:   [2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50],
+            blue:  [15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 3, 7, 11],
+            yellow:[28, 32, 36, 40, 44, 48, 0, 4, 8, 12, 16, 20, 24],
+            green: [41, 45, 49, 1, 5, 9, 13, 17, 21, 25, 29, 33, 37],
+          },
+        },
+        flightPaths: {
+          enabled: true,
+          captureOnLanding: true,
+          edges: {
+            red:   [{ from: 4, to: 17 }, { from: 8, to: 21 }],
+            blue:  [{ from: 17, to: 30 }, { from: 21, to: 34 }],
+            yellow:[{ from: 30, to: 43 }, { from: 34, to: 47 }],
+            green: [{ from: 43, to: 4 }, { from: 47, to: 8 }],
+          },
+        },
+      },
+      bases: { perPlayer: 4 },
+    };
+
+    // Default rules (align with MVP)
+    const DEFAULT_RULES = {
+      takeoff: "six",               // "six" | "fiveOrSix" | "even"
+      extraTurnOnSix: true,
+      tripleSixPenalty: false,
+      captureOnLand: true,
+      stackEnabled: true,
+      stackMovesTogether: false,
+      blockadePassThrough: false,    // if false: cannot pass/land on enemy stacks >=2
+      ownColorJump: { enabled: true, steps: 4 },
+      dashedFlight: { enabled: true, captureOnLanding: true },
+      homeLaneExactEntry: true,      // must step onto entry then into home with exact step
+      finishExact: "exact",          // "exact" | "noMoveIfOver" | "bounceBack"
+      safeTiles: { start: true, list: [] },
+    };
+
+    // ===== Utilities =====
+    const mod = (n, m) => ((n % m) + m) % m;
+    const clone = (x) => structuredClone ? structuredClone(x) : JSON.parse(JSON.stringify(x));
+
+    // Position helpers
+    // kind: "base" | "track" | "home" | "finished"
+    const Pos = {
+      base: () => ({ kind: "base" }),
+      track: (idx) => ({ kind: "track", idx }),
+      home: (idx) => ({ kind: "home", idx }),
+      finished: () => ({ kind: "finished" }),
+      isEqual: (a,b) => a.kind===b.kind && (a.idx??-1)===(b.idx??-1),
+    };
+
+    // ===== Game State shape (for reference) =====
+    // state = {
+    //   turn: playerId,
+    //   players: [{id,name,color}],
+    //   pieces: { [playerId]: [ {pos}, {pos}, {pos}, {pos} ] },
+    //   rollHistory: [],
+    // }
+
+    // ===== Occupancy Map =====
+    function buildOccupancy(state){
+      const occ = { track: Array(BOARD.track.length).fill(0).map(()=>({})), home:{} };
+      for(const p of state.players){
+        for(const pc of state.pieces[p.id]){
+          const pos = pc.pos;
+          if(pos.kind==='track'){
+            occ.track[pos.idx][p.color] = (occ.track[pos.idx][p.color]||0)+1;
+          } else if(pos.kind==='home'){
+            if(!occ.home[p.color]) occ.home[p.color] = Array(BOARD.homeLane.length).fill(0);
+            occ.home[p.color][pos.idx] += 1;
+          }
+        }
+      }
+      return occ;
+    }
+
+    // ===== Rules: takeoff condition =====
+    function canTakeoffWith(dice, rules){
+      if(rules.takeoff === 'six') return dice === 6;
+      if(rules.takeoff === 'fiveOrSix') return dice === 5 || dice === 6;
+      if(rules.takeoff === 'even') return dice % 2 === 0;
+      return dice === 6;
+    }
+
+    // ===== Path & move generation =====
+    function stepsToEntry(color, idx){
+      const entry = BOARD.homeLane.entryIndex[color];
+      return mod(entry - idx, BOARD.track.length);
+    }
+
+    function isOwnJumpTile(color, idx){
+      return BOARD.special.ownColorJump.indices[color].includes(idx);
+    }
+
+    function flightTo(color, idx){
+      const list = BOARD.special.flightPaths.edges[color];
+      const edge = list.find(e=>e.from===idx);
+      return edge? edge.to : null;
+    }
+
+    function isStartTile(color, idx){
+      return idx === BOARD.track.startIndex[color];
+    }
+
+    function isSafeTrackTile(color, idx, rules){
+      if(rules.safeTiles.start && isStartTile(color, idx)) return true;
+      if(rules.safeTiles.list && rules.safeTiles.list.includes(idx)) return true;
+      return false;
+    }
+
+    function generateLegalMoves(state, rules, dice){
+      const player = state.players.find(p=>p.id===state.turn);
+      const occ = buildOccupancy(state);
+      const myPieces = state.pieces[player.id];
+      const moves = [];
+
+      myPieces.forEach((piece, i)=>{
+        const pos = piece.pos;
+        if(pos.kind==='finished') return; // already home
+
+        // 1) Takeoff from base
+        if(pos.kind==='base'){
+          if(canTakeoffWith(dice, rules)){
+            const destIdx = BOARD.track.startIndex[player.color];
+            // landing rules: cannot land on enemy blockade; capture single enemy if allowed & not safe tile
+            const tileOcc = occ.track[destIdx];
+            const enemyCount = Object.entries(tileOcc).filter(([c,n])=>c!==player.color).reduce((a,[,n])=>a+n,0);
+            const allyCount = tileOcc[player.color]||0;
+            // if ally on dest and stacking disabled -> cannot land
+            if(allyCount>0 && !rules.stackEnabled){
+              // cannot takeoff onto own piece
+            } else if(enemyCount>=2 && !rules.blockadePassThrough){
+              // cannot land on enemy blockade (>=2)
+            } else {
+              const events = [];
+              let final = Pos.track(destIdx);
+              // Apply jump/flight from start tile as per rules
+              ({ final, events } = resolveSpecialsAfterLanding(player, final, rules, occ, events));
+              // capture after specials resolved
+              const capture = resolveCaptureOnTrack(player, final, rules, occ);
+              if(capture?.blocked){
+                // landing illegal due to enemy blockade
+              } else {
+                moves.push({ pieceIndex: i, kind:'takeoff', dice, from:pos, to:final, events, capture });
+              }
+            }
+          }
+          return;
+        }
+
+        // 2) Move along current path (track or home)
+        const sim = simulateMove(player, pos, dice, rules, occ);
+        if(sim && sim.legal){
+          moves.push({ pieceIndex: i, kind:'move', dice, from:pos, to:sim.final, events:sim.events, capture:sim.capture });
+        }
+      });
+
+      return moves;
+    }
+
+    function simulateMove(player, fromPos, dice, rules, occ){
+      const events = [];
+      let current = clone(fromPos);
+      let remaining = dice;
+
+      // helper to check blockade on a track tile (enemy stack >=2)
+      const isEnemyBlockade = (idx)=>{
+        const tileOcc = occ.track[idx];
+        const enemyStack = Object.entries(tileOcc).filter(([c,n])=>c!==player.color).some(([,n])=>n>=2);
+        return enemyStack;
+      };
+
+      // step-wise movement
+      while(remaining>0){
+        if(current.kind==='track'){
+          // If next step would go into home lane (we are at entry tile and we have remaining steps)
+          const atEntry = current.idx === BOARD.homeLane.entryIndex[player.color];
+          if(atEntry){
+            // Exact entry rule: must spend 1 step to move into home[0]
+            if(rules.homeLaneExactEntry){
+              // can only enter if this step is the last needed to reach entry + 1
+              // Since we are already on entry, we can always take 1 step into home[0]
+              current = Pos.home(0);
+              remaining -= 1;
+              events.push({ type:'enter-home' });
+              continue;
+            } else {
+              current = Pos.home(0);
+              remaining -= 1;
+              events.push({ type:'enter-home' });
+              continue;
+            }
+          }
+
+          // Move one step along track; check passing through enemy blockade
+          const nextIdx = mod(current.idx + 1, BOARD.track.length);
+          if(!rules.blockadePassThrough && isEnemyBlockade(nextIdx)){
+            return { legal:false, reason:'blocked-by-enemy-stack', events };
+          }
+          current = Pos.track(nextIdx);
+          remaining -= 1;
+        } else if(current.kind==='home'){
+          const next = current.idx + 1;
+          if(next < BOARD.homeLane.length){
+            current = Pos.home(next);
+            remaining -= 1;
+          } else {
+            // we are beyond last; handle finishExact
+            if(rules.finishExact === 'exact'){
+              // cannot move further; illegal if overshoot
+              return { legal:false, reason:'need-exact-to-finish', events };
+            } else if(rules.finishExact === 'noMoveIfOver'){
+              return { legal:false, reason:'no-move-if-over', events };
+            } else if(rules.finishExact === 'bounceBack'){
+              // bounce back from last index (len-1)
+              const last = BOARD.homeLane.length - 1;
+              const over = next - last; // usually 1
+              let idx = last - (over - 1);
+              current = Pos.home(idx);
+              remaining -= 1; // we consumed one step already
+            }
+          }
+        } else if(current.kind==='base' || current.kind==='finished'){
+          return { legal:false, reason:'invalid-start', events };
+        }
+      }
+
+      // After steps used, we landed on some pos
+      // Apply specials only when on track
+      let capture = null;
+      if(current.kind==='track'){
+        // resolve specials (jump/flight)
+        ({ final: current, events } = resolveSpecialsAfterLanding(player, current, rules, occ, events));
+        // resolve capture
+        capture = resolveCaptureOnTrack(player, current, rules, occ);
+        if(capture?.blocked) return { legal:false, reason:'land-on-enemy-blockade', events };
+      } else if(current.kind==='home'){
+        // If landed beyond last index: check finish for exact rule above; here we consider reach last as finished
+        if(current.idx === BOARD.homeLane.length - 1){
+          current = Pos.finished();
+          events.push({ type:'finish' });
+        }
+      }
+
+      return { legal:true, final: current, events, capture };
+    }
+
+    function resolveSpecialsAfterLanding(player, pos, rules, occ, events){
+      let current = clone(pos);
+      // Jump on own color tile
+      if(rules.ownColorJump.enabled && current.kind==='track' && isOwnJumpTile(player.color, current.idx)){
+        const target = mod(current.idx + rules.ownColorJump.steps, BOARD.track.length);
+        // Passing through blockade? treat as instantaneous jump; landing legality handled later
+        current = Pos.track(target);
+        events.push({ type:'jump', from: pos.idx, to: target });
+      }
+      // Flight along dashed lines
+      if(rules.dashedFlight.enabled && current.kind==='track'){
+        const to = flightTo(player.color, current.idx);
+        if(to!=null){
+          current = Pos.track(to);
+          events.push({ type:'flight', from: pos.idx, to });
+        }
+      }
+      return { final: current, events };
+    }
+
+    function resolveCaptureOnTrack(player, pos, rules, occ){
+      if(pos.kind!=='track' || !rules.captureOnLand) return null;
+      const tileOcc = occ.track[pos.idx];
+      const enemyEntries = Object.entries(tileOcc).filter(([c,n])=>c!==player.color && n>0);
+      const allyCount = tileOcc[player.color]||0;
+      // Cannot land on enemy blockade
+      if(enemyEntries.some(([,n])=>n>=2) && !rules.blockadePassThrough){
+        return { blocked: true };
+      }
+      const safe = isSafeTrackTile(player.color, pos.idx, rules);
+      if(safe) return { captured: [] };
+      const captured = [];
+      if(enemyEntries.length>0){
+        // capture all enemy singles on this tile
+        for(const [c,n] of enemyEntries){
+          for(let i=0;i<n;i++) captured.push({ color:c });
+        }
+      }
+      return { captured };
+    }
+
+    // ===== Public API (window.GameRules) =====
+    window.GameRules = {
+      BOARD,
+      DEFAULT_RULES,
+      generateLegalMoves,
+      simulateMove,
+      buildOccupancy,
+      Pos,
+    };
+
+    // ===== Dev Console Smoke Tests =====
+    (function devTests(){
+      const players = [
+        { id:'P1', name:'Mandy', color:'red' },
+        { id:'P2', name:'Brian', color:'blue' },
+      ];
+      const initPieces = {
+        P1: [ {pos: Pos.base()}, {pos: Pos.base()}, {pos: Pos.base()}, {pos: Pos.base()} ],
+        P2: [ {pos: Pos.base()}, {pos: Pos.base()}, {pos: Pos.base()}, {pos: Pos.base()} ],
+      };
+      const state = { turn:'P1', players, pieces: initPieces };
+      const rules = DEFAULT_RULES;
+      // Example: roll 6 → should allow takeoff
+      let moves = generateLegalMoves(state, rules, 6);
+      console.log('[Test] P1 roll=6 moves:', moves);
+      // Place one P1 piece on track and test jump/flight
+      state.pieces.P1[0].pos = Pos.track(BOARD.track.startIndex.red); // at start
+      let occ = buildOccupancy(state);
+      let sim = simulateMove(players[0], state.pieces.P1[0].pos, 2, rules, occ);
+      console.log('[Test] Move from start by 2 (check jump/flight):', sim);
+    })();
+  </script>
+  
+  <!-- Enhancements: animation + rules mapping + guards (App overrides) -->
+  <script>
+  (function(){
+    const A = window.App;
+    if(!A) return;
+
+    // ===== Rules mapping from the form (custom preset) =====
+    A.readRulesFromForm = function(){
+      const f = this.$.formSetup;
+      const val = (name, def)=> (f.querySelector('[name="'+name+'"]:checked')?.value) || def;
+      const chk = (name)=> !!f.querySelector('[name="'+name+'"]')?.checked;
+      const num = (name, def)=> { const n = parseInt(f.querySelector('[name="'+name+'"]')?.value||def,10); return isNaN(n)? def:n; };
+      return {
+        takeoff: val('takeoff','six'),
+        extraTurnOnSix: chk('extraTurnOnSix'),
+        tripleSixPenalty: chk('tripleSixPenalty'),
+        captureOnLand: chk('captureOnLand'),
+        stackEnabled: chk('stackEnabled'),
+        stackMovesTogether: chk('stackMovesTogether'),
+        blockadePassThrough: chk('blockadePassThrough'),
+        ownColorJump: { enabled: chk('ownColorJumpEnabled'), steps: num('ownColorJumpSteps',4) },
+        dashedFlight: { enabled: chk('dashedFlightEnabled'), captureOnLanding: chk('captureOnFlight') },
+        homeLaneExactEntry: chk('homeLaneExactEntry'),
+        finishExact: (f.querySelector('[name="finishExact"]')?.value)||'exact',
+        safeTiles: { start: chk('startTileSafe'), list: [] },
+      };
+    };
+
+    // Before submit (capture phase), set rules from preset/custom
+    if(A.$ && A.$.formSetup){
+      A.$.formSetup.addEventListener('submit',(e)=>{
+        const preset = (A.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
+        if(preset==='custom') A.state.rules = A.readRulesFromForm();
+        else if(preset==='classic') A.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES);
+        else if(preset==='fast') A.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES, { takeoff:'fiveOrSix' });
+      }, true);
+    }
+
+    // Animation helpers
+    A.animatePiece = function(player, from, to, duration){
+      return new Promise(resolve=>{
+        const g = this.$.gHL; const NS='http://www.w3.org/2000/svg';
+        const ghost = document.createElementNS(NS,'circle');
+        ghost.setAttribute('cx', from.x); ghost.setAttribute('cy', from.y); ghost.setAttribute('r', 18);
+        ghost.setAttribute('fill', `var(--${player.color})`);
+        ghost.setAttribute('stroke', '#0b0f14'); ghost.setAttribute('stroke-width','3');
+        g.appendChild(ghost);
+        const t0 = performance.now(); const D = duration||480; const ease = (t)=>1-Math.pow(1-t,3);
+        const step = (now)=>{
+          const p = Math.min(1,(now-t0)/D), e = ease(p);
+          const x = from.x + (to.x - from.x)*e, y = from.y + (to.y - from.y)*e;
+          ghost.setAttribute('cx',x); ghost.setAttribute('cy',y);
+          if(p<1) requestAnimationFrame(step); else { g.removeChild(ghost); resolve(); }
+        };
+        requestAnimationFrame(step);
+      });
+    };
+    A.pulseAt = function(x,y,color){
+      const g = this.$.gHL; const NS='http://www.w3.org/2000/svg';
+      const ring = document.createElementNS(NS,'circle');
+      ring.setAttribute('cx',x); ring.setAttribute('cy',y); ring.setAttribute('r','8');
+      ring.setAttribute('fill','none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width','3'); ring.setAttribute('opacity','0.9');
+      g.appendChild(ring);
+      let r=8; const id = setInterval(()=>{ r+=4; ring.setAttribute('r',r); const op=parseFloat(ring.getAttribute('opacity')); ring.setAttribute('opacity', String(Math.max(0, op-0.12))); if(r>36){ clearInterval(id); g.removeChild(ring);} },16);
+    };
+
+    // === Threat helpers ===
+    A.computeThreatFaces = function(targetIdx){
+      const L = window.GameRules.BOARD.track.length;
+      const me = this.currentPlayer();
+      const faces = new Set();
+      for(const opp of this.state.players){ if(opp.id===me.id) continue;
+        for(const pc of this.state.pieces[opp.id]){
+          if(pc.pos.kind!=='track') continue;
+          const d = ((targetIdx - pc.pos.idx) % L + L) % L;
+          if(d>=1 && d<=6) faces.add(d);
+        }
+      }
+      return Array.from(faces).sort((a,b)=>a-b);
+    };
+    A.showThreatBadge = function(x,y,faces){
+      // remove existing badges
+      const g = this.$.gHL; g.querySelectorAll('.threat-badge').forEach(n=>n.remove());
+      if(!faces || faces.length===0) return;
+      const NS='http://www.w3.org/2000/svg';
+      const min = faces[0];
+      const badge = document.createElementNS(NS,'g');
+      badge.setAttribute('class','threat-badge');
+      const bx = x+26, by = y-26;
+      const rect = document.createElementNS(NS,'rect');
+      rect.setAttribute('x', bx-12); rect.setAttribute('y', by-10);
+      rect.setAttribute('width', 24); rect.setAttribute('height', 20);
+      rect.setAttribute('rx', 6);
+      rect.setAttribute('fill', '#ef4444');
+      rect.setAttribute('stroke', '#000'); rect.setAttribute('stroke-width', '2');
+      const txt = document.createElementNS(NS,'text');
+      txt.setAttribute('x', bx); txt.setAttribute('y', by+5);
+      txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.setAttribute('fill','#0b0f14');
+      txt.textContent = String(min);
+      badge.appendChild(rect); badge.appendChild(txt);
+      g.appendChild(badge);
+    };
+
+    // Guards
+    A.state.animating = false;
+
+    // Override rollDice to guard animation
+    const _roll = A.rollDice.bind(A);
+    A.rollDice = function(){ if(this.state.animating) return; return _roll(); };
+
+    // Override onKey to guard animation
+    const _onKey = A.onKey.bind(A);
+    A.onKey = function(e){ if(this.state.animating) return; return _onKey(e); };
+
+    // Override redrawPieces click handler to guard animation (reuse original then set guard)
+    const _redraw = A.redrawPieces.bind(A);
+    A.redrawPieces = function(){ _redraw(); const g=this.$.gPieces; const self=this; g.onclick = function(ev){ if(self.state.animating) return; const t = ev.target.closest('circle'); if(!t) return; const pid = t?.dataset?.player; const idx = parseInt(t?.dataset?.index||'-1',10); if(pid!==self.state.turn||isNaN(idx)) return; const mv=(self.state.legalMoves||[]).find(m=>m.pieceIndex===idx); if(mv) self.applyMove(mv); }; };
+
+    // Override applyMove to animate then commit
+    A.applyMove = function(move){
+      this.pushHistory();
+      const pid = this.state.turn; const player = this.currentPlayer();
+      const piece = this.state.pieces[pid][move.pieceIndex];
+      const fromXY = this.posToXY(player.color, piece.pos);
+      const toXY = this.posToXY(player.color, move.to) || fromXY;
+      this.state.animating = true;
+      this.animatePiece(player, fromXY, toXY, 520).then(async ()=>{
+        // handle captures with animation
+        const capturedInfos = [];
+        if(move.capture && move.capture.captured && move.to.kind==='track'){
+          for(const opp of this.state.players){ if(opp.id===pid) continue;
+            this.state.pieces[opp.id].forEach((pc,idx)=>{
+              if(pc.pos.kind==='track' && pc.pos.idx===move.to.idx){
+                capturedInfos.push({ opp, pieceIndex: idx, fromIdx: pc.pos.idx });
+              }
+            });
+          }
+        }
+        // animate captured pieces to their base
+        for(const info of capturedInfos){
+          const oppColor = info.opp.color;
+          const from = this.geom.track[move.to.idx];
+          const baseSlot = this.geom.bases[oppColor][0];
+          await this.animatePiece({color:oppColor}, from, baseSlot, 420);
+        }
+        // commit state after animations
+        piece.pos = move.to;
+        if(capturedInfos.length>0){
+          for(const info of capturedInfos){
+            const arr = this.state.pieces[info.opp.id];
+            arr[info.pieceIndex].pos = window.GameRules.Pos.base();
+          }
+          this.log(player.name+' 吃子！把對手送回基地');
+        }
+        if(move.events){
+          move.events.forEach(ev=>{ if(ev.type==='jump') this.log(player.name+' 觸發跳格 (+'+this.state.rules.ownColorJump.steps+')'); if(ev.type==='flight') this.log(player.name+' 走飛線'); if(ev.type==='finish') this.log(player.name+' 抵達終點！'); });
+        }
+        this.redrawPieces();
+        this.$.gHL.innerHTML='';
+        this.pulseAt(toXY.x, toXY.y, 'var(--'+player.color+')');
+        // threat badge: show最細嘅骰面（例如 4）可以被食
+        if(move.to.kind==='track'){
+          const faces = this.computeThreatFaces(move.to.idx);
+          this.showThreatBadge(toXY.x, toXY.y, faces);
+        }
+        const again = (this.state.dice===6 && this.state.rules.extraTurnOnSix);
+        this.state.animating = false;
+        if(!again) this.advanceTurn(); else { this.updateTurnUI(); this.maybeAutoPlayIfAI(); }
+      });
+    };
+
+  })();
+  </script>
+</body>
+</html>
