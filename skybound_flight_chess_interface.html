@@ -280,11 +280,11 @@
   // ========================= Rules Engine (Part 2) =========================
   (function(){
     const BOARD = {
-      boardSpecVersion: "classic-52-v1",
+      boardSpecVersion: "skybound-variant-v2",
       track: { length: 52, orderClockwise: ["red","blue","yellow","green"], startIndex: { red:0, blue:13, yellow:26, green:39 } },
       homeLane: { length: 6, entryIndex: { red:50, blue:11, yellow:24, green:37 } },
       special: {
-        safeTiles: { start:true, extra:[] },
+        safeTiles: { start:true, extra:[9,22,35,48] },
         ownColorJump: {
           enabled:true, steps:4,
           indices:{
@@ -299,7 +299,23 @@
           blue:[{from:17,to:30},{from:21,to:34}],
           yellow:[{from:30,to:43},{from:34,to:47}],
           green:[{from:43,to:4},{from:47,to:8}],
-        } }
+        } },
+        powerUps:[
+          {idx:5,effect:'extraRoll',label:'尾流增壓'},
+          {idx:18,effect:'forward2',label:'加速噴射'},
+          {idx:31,effect:'assist',label:'僚機護航'},
+          {idx:44,effect:'extraRoll',label:'超頻引擎'}
+        ],
+        traps:[
+          {idx:12,effect:'stall',label:'亂流回送'},
+          {idx:38,effect:'grounded',label:'維修檢查'}
+        ],
+        portals:[
+          {id:'A',label:'A',from:8,to:30},
+          {id:'A',label:'A',from:30,to:8},
+          {id:'B',label:'B',from:21,to:43},
+          {id:'B',label:'B',from:43,to:21}
+        ]
       },
       bases:{ perPlayer:4 }
     };
@@ -308,12 +324,18 @@
       takeoff:"six", extraTurnOnSix:true, tripleSixPenalty:false,
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
-      homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[]},
+      homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:BOARD.special.safeTiles.extra.slice()},
       turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
     };
 
     const mod = (n,m)=>((n%m)+m)%m;
     const clone = (x)=> (window.structuredClone? structuredClone(x) : JSON.parse(JSON.stringify(x)));
+    const POWERUP_BY_IDX=new Map(); (BOARD.special.powerUps||[]).forEach(p=>{ POWERUP_BY_IDX.set(p.idx,p); });
+    const TRAP_BY_IDX=new Map(); (BOARD.special.traps||[]).forEach(t=>{ TRAP_BY_IDX.set(t.idx,t); });
+    const PORTALS_BY_FROM=new Map(); (BOARD.special.portals||[]).forEach(p=>{
+      if(!PORTALS_BY_FROM.has(p.from)) PORTALS_BY_FROM.set(p.from,[]);
+      PORTALS_BY_FROM.get(p.from).push(p);
+    });
 
     const Pos = {
       base:(slot=0)=>({kind:'base',slot}),
@@ -401,9 +423,9 @@
             if(!(allyCount>0 && !rules.stackEnabled) && !(enemyCount>=2 && !rules.blockadePassThrough)){
               const events=[]; let final=Pos.track(destIdx);
               const special=resolveSpecialsAfterLanding(player,final,rules,occ,events);
-              final=special.final; const eventLog=special.events;
+              final=special.final; const eventLog=special.events; const effects=special.effects;
               const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight});
-              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,capture,stack:[i]});
+              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects,capture,stack:[i]});
             }
           }
           return;
@@ -411,14 +433,14 @@
         const sim = simulateMove(player,pos,dice,rules,occ);
         if(sim && sim.legal){
           const group = stackGroup?stackGroup.slice():[i];
-          moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,capture:sim.capture,stack:group});
+          moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,effects:sim.effects,capture:sim.capture,stack:group});
         }
       });
       return moves;
     }
 
     function simulateMove(player,fromPos,dice,rules,occ){
-      let current=clone(fromPos); let remaining=dice; let events=[];
+      let current=clone(fromPos); let remaining=dice; let events=[]; let effects=[];
       const entryIdx=BOARD.homeLane.entryIndex[player.color];
       const isEnemyBlockade=(idx)=>{ const tileOcc=occ.track[idx]; return Object.entries(tileOcc).filter(([c,n])=>c!==player.color).some(([,n])=>n>=2); };
       let stepsTaken=0;
@@ -455,29 +477,66 @@
       let capture=null;
       if(current.kind==='track'){
         const special=resolveSpecialsAfterLanding(player,current,rules,occ,events);
-        current=special.final; events=special.events;
+        current=special.final; events=special.events; effects=special.effects||[];
         capture=resolveCaptureOnTrack(player,current,rules,occ,{viaFlight:special.viaFlight});
         if(capture?.blocked) return {legal:false,reason:'land-on-enemy-blockade',events};
       } else if(current.kind==='home'){
         if(current.idx===BOARD.homeLane.length-1){ current=Pos.finished(); events.push({type:'finish'}); }
       }
-      return {legal:true,final:current,events,capture};
+      return {legal:true,final:current,events,capture,effects};
     }
 
     function resolveSpecialsAfterLanding(player,pos,rules,occ,events){
       let current=clone(pos);
       let viaFlight=false;
+      const timeline=Array.isArray(events)?events.slice():[];
+      const effects=[];
       if(rules.ownColorJump.enabled && current.kind==='track' && isOwnJumpTile(player.color,current.idx)){
         const target = mod(current.idx + rules.ownColorJump.steps, BOARD.track.length);
-        current = Pos.track(target); events.push({type:'jump',from:pos.idx,to:target});
+        current = Pos.track(target); timeline.push({type:'jump',from:pos.idx,to:target});
       }
       const flightsEnabled = (BOARD.special.flightPaths?.enabled!==false);
       const flightRule = rules.dashedFlight||{};
       if(flightsEnabled && flightRule.enabled && current.kind==='track'){
         const to = flightTo(player.color,current.idx);
-        if(to!=null){ current=Pos.track(to); events.push({type:'flight',from:pos.idx,to}); viaFlight=true; }
+        if(to!=null){ current=Pos.track(to); timeline.push({type:'flight',from:pos.idx,to}); viaFlight=true; }
       }
-      return {final:current,events,viaFlight};
+      const visitedPortals=new Set();
+      let loopGuard=0;
+      while(current.kind==='track' && loopGuard<12){
+        loopGuard+=1;
+        const idx=current.idx;
+        const portalOptions=PORTALS_BY_FROM.get(idx)||[];
+        if(portalOptions.length>0){
+          let chosen=null;
+          for(const portal of portalOptions){
+            const key=portal.id?`id:${portal.id}`:`${portal.from}->${portal.to}`;
+            if(visitedPortals.has(key)) continue;
+            chosen=portal;
+            visitedPortals.add(key);
+            break;
+          }
+          if(chosen){
+            const toIdx=mod(chosen.to, BOARD.track.length);
+            effects.push({type:'portal',from:idx,to:toIdx,id:chosen.id,label:chosen.label});
+            timeline.push({type:'portal',from:idx,to:toIdx,id:chosen.id,label:chosen.label});
+            current=Pos.track(toIdx);
+            continue;
+          }
+        }
+        const power=POWERUP_BY_IDX.get(idx);
+        if(power){
+          effects.push({type:'powerup',idx,effect:power.effect,label:power.label});
+          timeline.push({type:'powerup',idx,effect:power.effect,label:power.label});
+        }
+        const trap=TRAP_BY_IDX.get(idx);
+        if(trap){
+          effects.push({type:'trap',idx,effect:trap.effect,label:trap.label});
+          timeline.push({type:'trap',idx,effect:trap.effect,label:trap.label});
+        }
+        break;
+      }
+      return {final:current,events:timeline,viaFlight,effects};
     }
 
     function resolveCaptureOnTrack(player,pos,rules,occ,context={}){
@@ -538,7 +597,7 @@
     });
   })();
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0 },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, skipTurn:{}, animationDepth:0, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0 },
     geom:{ track:[], home:{}, bases:{} },
     init(){
       if(this._initialized) return;
@@ -835,7 +894,7 @@
         captureOnLand:chk('captureOnLand'), stackEnabled:chk('stackEnabled'), stackMovesTogether:chk('stackMovesTogether'), blockadePassThrough:chk('blockadePassThrough'),
         ownColorJump:{enabled:chk('ownColorJumpEnabled'),steps:num('ownColorJumpSteps',4)}, dashedFlight:{enabled:chk('dashedFlightEnabled'),captureOnLanding:chk('captureOnFlight')},
         homeLaneExactEntry:chk('homeLaneExactEntry'), finishExact:(f.querySelector('[name="finishExact"]')?.value)||'exact',
-        safeTiles:{start:chk('startTileSafe'),list:[]},
+        safeTiles:{start:chk('startTileSafe'),list:BOARD.special.safeTiles.extra.slice()},
         turnTimerSec:Math.max(0,num('turnTimerSec',0)),
         animSpeed:(()=>{ const raw=(f.querySelector('[name="animSpeed"]')?.value)||'normal'; return ['slow','normal','fast'].includes(raw)?raw:'normal'; })(),
         undoEnabled:chk('undoEnabled')
@@ -874,7 +933,7 @@
       });
       if(players.length<2){ this.log('至少需要 2 位玩家'); return; }
       this.state.players=players; this.normalizePlayerControls(); this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
-      this.state.consecutiveSixes={};
+      this.state.consecutiveSixes={}; this.state.skipTurn={}; this.state.animationDepth=0;
       this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
       if(preset==='custom'){ this.state.rules = Object.assign({}, window.GameRules.DEFAULT_RULES, this.readRulesFromForm()); }
@@ -883,9 +942,10 @@
       for(const p of players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
         this.state.consecutiveSixes[p.id]=0;
+        this.state.skipTurn[p.id]=0;
       }
       this.normalizePieces();
-      this.state.legalMoves=[]; this.state.animating=false; this.state.dice=null;
+      this.state.legalMoves=[]; this.state.animating=false; this.state.dice=null; this.state.animationDepth=0;
       this.$.diceOut.textContent='–';
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
@@ -909,10 +969,11 @@
       this.updateControlAssignments();
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       this.state.pieces={};
-      this.state.consecutiveSixes={};
+      this.state.consecutiveSixes={}; this.state.skipTurn={}; this.state.animationDepth=0;
       for(const p of this.state.players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
         this.state.consecutiveSixes[p.id]=0;
+        this.state.skipTurn[p.id]=0;
       }
       this.normalizePieces();
       this.state.turn=this.state.players[0].id;
@@ -920,6 +981,7 @@
       this.state.legalMoves=[];
       this.state.animating=false;
       this.state.dice=null;
+      this.state.animationDepth=0;
       this.$.diceOut.textContent='–';
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
@@ -988,14 +1050,33 @@
       const svg=this.$.svg; const W=1000,H=1000; svg.setAttribute('viewBox',`0 0 ${W} ${H}`); const cx=W/2,cy=H/2,r=380;
       const gGrid=this.$.gGrid,gTiles=this.$.gTiles,gSpecials=this.$.gSpecials,gPieces=this.$.gPieces,gHL=this.$.gHL; gGrid.innerHTML=gTiles.innerHTML=gSpecials.innerHTML=gPieces.innerHTML=gHL.innerHTML='';
       const NS='http://www.w3.org/2000/svg'; const css=getComputedStyle(document.documentElement); const color=(name)=>css.getPropertyValue(name).trim();
-      const geom=this.geom={track:[],home:{},bases:{}};
+      const geom=this.geom={track:[],home:{},bases:{},baseCenters:{}};
       const el=(n,a={},ch=[])=>{ const node=document.createElementNS(NS,n); for(const [k,v] of Object.entries(a)) node.setAttribute(k,v); ch.forEach(c=>node.appendChild(c)); return node; };
       const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
       const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
       const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
-      const ringPoint=(i,total=window.GameRules.BOARD.track.length)=>{ const a=(Math.PI*2)*(i/total)-Math.PI/2; const radius=r-20; return{ x:cx+Math.cos(a)*radius, y:cy+Math.sin(a)*radius, angle:a }; };
+      const boardSpec=window.GameRules.BOARD;
+      const specials=boardSpec.special||{};
+      const safeExtra=new Set(specials.safeTiles?.extra||[]);
+      const powerUps=specials.powerUps||[];
+      const traps=specials.traps||[];
+      const portals=specials.portals||[];
+      const buildStar=(cx,cy,rOuter=36,rInner=14)=>{
+        const pts=[];
+        for(let i=0;i<10;i++){
+          const angle=Math.PI/5*i - Math.PI/2;
+          const radius=(i%2===0)?rOuter:rInner;
+          pts.push(`${cx+Math.cos(angle)*radius},${cy+Math.sin(angle)*radius}`);
+        }
+        return pts.join(' ');
+      };
+      const buildTriangle=(cx,cy,size)=>{
+        const h=size*Math.sqrt(3)/2;
+        return `${cx},${cy-h} ${cx-size/2},${cy+h/2} ${cx+size/2},${cy+h/2}`;
+      };
+      const ringPoint=(i,total=boardSpec.track.length)=>{ const a=(Math.PI*2)*(i/total)-Math.PI/2; const radius=r-20; return{ x:cx+Math.cos(a)*radius, y:cy+Math.sin(a)*radius, angle:a }; };
       gGrid.appendChild(el('circle',{cx,cy,r:r+60,fill:'#0a0a0a',stroke:color('--tile-grid'),'stroke-width':2,opacity:.5}));
-      const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJump=window.GameRules.BOARD.special.ownColorJump.indices;
+      const total=boardSpec.track.length; const startIdx=boardSpec.track.startIndex; const entryIdx=boardSpec.homeLane.entryIndex; const ownJump=boardSpec.special.ownColorJump.indices;
       const defs=el('defs'); svg.insertBefore(defs, svg.firstChild);
       const jumpPatterns={};
       const ensureJumpPattern=(col)=>{
@@ -1015,6 +1096,9 @@
         if(jumpCol){ const hex=color(`--${jumpCol}`); attrs.fill=mixWithWhite(hex,0.15); attrs['fill-opacity']=0.9; attrs.stroke=withAlpha(hex,0.6); attrs['stroke-width']=2.5; }
         gTiles.appendChild(el('rect',attrs));
         if(jumpCol){ ensureJumpPattern(jumpCol); gTiles.appendChild(el('rect',{x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:`url(#jump-${jumpCol})`,opacity:0.5})); }
+        if(safeExtra.has(i)){
+          gSpecials.appendChild(el('rect',{x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:withAlpha('#94a3b8',0.18),stroke:withAlpha('#cbd5f5',0.55),'stroke-width':2,'stroke-dasharray':'6 6'}));
+        }
       }
       const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
       const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
@@ -1041,7 +1125,56 @@
           gSpecials.appendChild(el('circle',{cx:x,cy:y,r:dotRadius,fill:hex}));
         }
       }
-      const flights=window.GameRules.BOARD.special.flightPaths.edges; const flightGroup=el('g',{});
+      const drawnPortalFrom=new Set();
+      powerUps.forEach(pu=>{
+        const tile=geom.track[pu.idx]; if(!tile) return;
+        const group=el('g',{});
+        group.appendChild(el('polygon',{points:buildStar(tile.x,tile.y,20,8),fill:withAlpha('#38bdf8',0.78),stroke:'#0f172a','stroke-width':2}));
+        const icon=document.createElementNS(NS,'text');
+        icon.setAttribute('x',tile.x);
+        icon.setAttribute('y',tile.y+5);
+        icon.setAttribute('text-anchor','middle');
+        icon.setAttribute('font-size','16');
+        icon.setAttribute('font-weight','700');
+        icon.setAttribute('fill','#0b1120');
+        icon.textContent='⚡';
+        group.appendChild(icon);
+        gSpecials.appendChild(group);
+      });
+      traps.forEach(tp=>{
+        const tile=geom.track[tp.idx]; if(!tile) return;
+        const group=el('g',{});
+        group.appendChild(el('polygon',{points:buildTriangle(tile.x,tile.y,34),fill:withAlpha('#f87171',0.82),stroke:'#b91c1c','stroke-width':2}));
+        const icon=document.createElementNS(NS,'text');
+        icon.setAttribute('x',tile.x);
+        icon.setAttribute('y',tile.y+6);
+        icon.setAttribute('text-anchor','middle');
+        icon.setAttribute('font-size','16');
+        icon.setAttribute('font-weight','700');
+        icon.setAttribute('fill','#0b1120');
+        icon.textContent='!';
+        group.appendChild(icon);
+        gSpecials.appendChild(group);
+      });
+      portals.forEach(portal=>{
+        if(drawnPortalFrom.has(portal.from)) return;
+        drawnPortalFrom.add(portal.from);
+        const tile=geom.track[portal.from]; if(!tile) return;
+        const group=el('g',{});
+        group.appendChild(el('circle',{cx:tile.x,cy:tile.y,r:tileSize*0.44,stroke:withAlpha('#818cf8',0.86),'stroke-width':3,fill:'none','stroke-dasharray':'6 6'}));
+        group.appendChild(el('circle',{cx:tile.x,cy:tile.y,r:tileSize*0.26,stroke:withAlpha('#38bdf8',0.9),'stroke-width':2,fill:'none','stroke-dasharray':'4 6'}));
+        const icon=document.createElementNS(NS,'text');
+        icon.setAttribute('x',tile.x);
+        icon.setAttribute('y',tile.y+5);
+        icon.setAttribute('text-anchor','middle');
+        icon.setAttribute('font-size','14');
+        icon.setAttribute('font-weight','700');
+        icon.setAttribute('fill','#cbd5f5');
+        icon.textContent=portal.label||'P';
+        group.appendChild(icon);
+        gSpecials.appendChild(group);
+      });
+      const flights=boardSpec.special.flightPaths.edges; const flightGroup=el('g',{});
       const bezierTangent=(t,p0,p1,p2)=>{ const mt=1-t; return{ x:2*mt*(p1.x-p0.x)+2*t*(p2.x-p1.x), y:2*mt*(p1.y-p0.y)+2*t*(p2.y-p1.y) }; };
       for(const [ck,edges] of Object.entries(flights)){
         const strokeColor=color(`--${ck}`);
@@ -1066,7 +1199,7 @@
         }
       }
       gSpecials.appendChild(flightGroup);
-      const homeLen=window.GameRules.BOARD.homeLane.length; Object.entries(entryIdx).forEach(([col,idx])=>{
+      const homeLen=boardSpec.homeLane.length; Object.entries(entryIdx).forEach(([col,idx])=>{
         const entry=geom.track[idx]; const dir={x:cx-entry.x,y:cy-entry.y}; const len=Math.hypot(dir.x,dir.y)||1; const ux=dir.x/len,uy=dir.y/len;
         const spacing=tileSize+10; const offset=tileSize*0.6;
         geom.home[col]=[];
@@ -1081,7 +1214,46 @@
       });
       gGrid.appendChild(el('rect',{x:cx-60,y:cy-60,width:120,height:120,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:color('--tile-grid'),'stroke-width':2}));
       const baseDefs={red:{dx:-350,dy:-350},blue:{dx:350,dy:-350},yellow:{dx:350,dy:350},green:{dx:-350,dy:350}};
-      for(const [col,{dx,dy}] of Object.entries(baseDefs)){ const group=el('g',{}); const x=cx+dx,y=cy+dy,w=180,h=180; group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:22,fill:`var(--${col})`,opacity:.14,stroke:`var(--${col})`,'stroke-width':2})); const slots=[]; for(let i=-1;i<=1;i+=2){ for(let j=-1;j<=1;j+=2){ const sx=x+i*40,sy=y+j*40; slots.push({x:sx,y:sy}); group.appendChild(el('circle',{cx:sx,cy:sy,r:22,fill:'none',stroke:`var(--${col})`,'stroke-width':2,opacity:.8})); } } geom.bases[col]=slots; gGrid.appendChild(group); }
+      for(const [col,{dx,dy}] of Object.entries(baseDefs)){
+        const group=el('g',{}); const x=cx+dx,y=cy+dy,w=180,h=180;
+        geom.baseCenters[col]={x,y};
+        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:22,fill:`var(--${col})`,opacity:.14,stroke:`var(--${col})`,'stroke-width':2}));
+        const slots=[];
+        for(let i=-1;i<=1;i+=2){
+          for(let j=-1;j<=1;j+=2){
+            const sx=x+i*40,sy=y+j*40;
+            slots.push({x:sx,y:sy});
+            group.appendChild(el('circle',{cx:sx,cy:sy,r:22,fill:'none',stroke:`var(--${col})`,'stroke-width':2,opacity:.8}));
+          }
+        }
+        geom.bases[col]=slots;
+        gGrid.appendChild(group);
+      }
+      Object.entries(startIdx).forEach(([col,idx])=>{
+        const baseCenter=geom.baseCenters[col];
+        const startTile=geom.track[idx];
+        if(!baseCenter || !startTile) return;
+        const dir={x:startTile.x-baseCenter.x,y:startTile.y-baseCenter.y};
+        const len=Math.hypot(dir.x,dir.y)||1;
+        const ux=dir.x/len,uy=dir.y/len;
+        const segments=4;
+        const spacing=len/(segments+1);
+        for(let s=1;s<=segments;s++){
+          const px=baseCenter.x+ux*spacing*s;
+          const py=baseCenter.y+uy*spacing*s;
+          gSpecials.appendChild(el('rect',{x:px-tileSize*0.35,y:py-tileSize*0.35,width:tileSize*0.7,height:tileSize*0.7,rx:8,fill:withAlpha(color(`--${col}`),0.14),stroke:withAlpha(color(`--${col}`),0.5),'stroke-width':1.6}));
+        }
+      });
+      gSpecials.appendChild(el('polygon',{points:buildStar(cx,cy,70,28),fill:withAlpha('#22d3ee',0.16),stroke:withAlpha('#38bdf8',0.55),'stroke-width':2}));
+      const goalLabel=document.createElementNS(NS,'text');
+      goalLabel.setAttribute('x',cx);
+      goalLabel.setAttribute('y',cy+10);
+      goalLabel.setAttribute('text-anchor','middle');
+      goalLabel.setAttribute('font-size','20');
+      goalLabel.setAttribute('font-weight','700');
+      goalLabel.setAttribute('fill','#38bdf8');
+      goalLabel.textContent='GOAL';
+      gSpecials.appendChild(goalLabel);
       gGrid.appendChild(el('circle',{cx,cy,r:r+150,fill:'none',stroke:'#000','stroke-width':140,opacity:.35}));
     }
 ,
@@ -1169,6 +1341,9 @@
         if(move.events.some(ev=>ev.type==='enter-home')) parts.push('入家路');
         if(move.events.some(ev=>ev.type==='jump')) parts.push('跳格');
         if(move.events.some(ev=>ev.type==='flight')) parts.push('飛行');
+        if(move.events.some(ev=>ev.type==='portal')) parts.push('傳送門');
+        if(move.events.some(ev=>ev.type==='powerup')) parts.push('增益');
+        if(move.events.some(ev=>ev.type==='trap')) parts.push('陷阱');
         if(move.events.some(ev=>ev.type==='finish')) parts.push('終點');
       }
       const capturedCount=Array.isArray(move.capture?.captured)?move.capture.captured.length:0;
@@ -1230,23 +1405,36 @@
       }
     },
 
-    applyMove(move,source='system'){
-      if(!move) return;
-      if(!this.isInteractionPermitted(source)){ this.handleBlockedInteraction(source); return; }
-      this.pushHistory();
+    async applyMove(move,source='system',options={}){
+      const {skipHistory=false,suppressTurnAdvance=false,markBonus=false} = options;
+      if(!move) return null;
+      if(!this.isInteractionPermitted(source)){ this.handleBlockedInteraction(source); return null; }
+      if(!skipHistory) this.pushHistory();
       const pid=this.state.turn;
       const player=this.currentPlayer();
+      if(!player) return null;
       let movingIndices=Array.isArray(move.stack)?move.stack.slice():[move.pieceIndex];
       if(!movingIndices.includes(move.pieceIndex)) movingIndices.push(move.pieceIndex);
       movingIndices=Array.from(new Set(movingIndices)).sort((a,b)=>a-b);
       const movingPieces=movingIndices.map(idx=>({idx,piece:this.state.pieces[pid]?.[idx]})).filter(entry=>entry.piece);
       const leadEntry=movingPieces.find(entry=>entry.idx===move.pieceIndex) || movingPieces[0];
-      if(!leadEntry){ this.state.animating=false; return; }
+      if(!leadEntry) return null;
       const piece=leadEntry.piece;
       const fromXY=this.posToXY(player.color,piece.pos,leadEntry.idx);
       const toXY=this.posToXY(player.color,move.to,leadEntry.idx)||fromXY;
+      if(!fromXY || !toXY){
+        console.warn?.('[applyMove] Missing coordinates for animation', move);
+      }
+      if(typeof this.state.animationDepth!=='number') this.state.animationDepth=0;
+      this.state.animationDepth+=1;
       this.state.animating=true;
-      this.animatePiece(player,fromXY,toXY,this.getAnimDuration(520)).then(async()=>{
+      let effectResult={extraRoll:false,skipTurn:false,cancelExtraTurn:false};
+      try{
+        if(fromXY && toXY){
+          const duration=markBonus?this.getAnimDuration(380):this.getAnimDuration(520);
+          await this.animatePiece(player,fromXY,toXY,duration);
+        }
+
         const capturedInfos=[];
         if(move.capture && move.capture.captured && move.capture.captured.length>0 && move.to.kind==='track'){
           for(const opp of this.state.players){
@@ -1265,7 +1453,7 @@
           const capturedPiece=this.state.pieces[info.opp.id]?.[info.pieceIndex];
           const slotIndex=typeof capturedPiece?.baseSlot==='number'?capturedPiece.baseSlot:info.pieceIndex;
           const targetBase=this.posToXY(info.opp.color, window.GameRules.Pos.base(slotIndex), slotIndex);
-          if(targetBase){
+          if(from && targetBase){
             await this.animatePiece({color:info.opp.color}, from, targetBase, this.getAnimDuration(420));
           }
         }
@@ -1309,48 +1497,222 @@
             if(ev.type==='enter-home') this.log(`${player.name} 進入家路`);
             if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
             if(ev.type==='flight') this.log(`${player.name} 走飛線`);
+            if(ev.type==='portal') this.log(`${player.name} 穿越傳送門 ${ev.label||''}`.trim());
+            if(ev.type==='powerup') this.log(`${player.name} 觸發增益：${ev.label||ev.effect}`);
+            if(ev.type==='trap') this.log(`${player.name} 誤闖陷阱：${ev.label||ev.effect}`);
             if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
           });
         }
 
         this.redrawPieces();
         this.$.gHL.innerHTML='';
-        this.pulseAt(toXY.x,toXY.y,`var(--${player.color})`);
-        if(move.to.kind==='track'){
-          const faces=this.computeThreatFaces(move.to.idx);
-          this.showThreatBadge(toXY.x,toXY.y,faces);
+        if(toXY){
+          this.pulseAt(toXY.x,toXY.y,`var(--${player.color})`);
+          if(move.to.kind==='track'){
+            const faces=this.computeThreatFaces(move.to.idx);
+            this.showThreatBadge(toXY.x,toXY.y,faces);
+          }else{
+            this.showThreatBadge(toXY.x,toXY.y,[]);
+          }
         }else{
-        this.showThreatBadge(toXY.x,toXY.y,[]);
-      }
+          this.showThreatBadge(0,0,[]);
+        }
 
-      const again=(this.state.dice===6 && this.state.rules?.extraTurnOnSix);
-      this.state.animating=false;
-      this.renderHints();
-      if(!again){
-        this.advanceTurn();
-      }else{
-        this.state.dice=null;
-        this.$.diceOut.textContent='–';
-        this.state.legalMoves=[];
-        this.clearTurnTimer();
-        this.beginTurnTimer();
-        this.saveGame();
-        this.updateTurnUI();
-        this.updateTurnPrompt(true);
-        this.maybeAutoPlayIfAI();
+        effectResult=await this.processPostMoveEffects(move,player,leadEntry.idx,{markBonus});
+
+        const baseAgain=(!suppressTurnAdvance && this.state.dice===6 && this.state.rules?.extraTurnOnSix);
+        let again=baseAgain;
+        if(effectResult.cancelExtraTurn) again=false;
+        if(effectResult.extraRoll) again=true;
+
+        this.renderHints();
+
+        if(suppressTurnAdvance){
+          this.saveGame();
+          return effectResult;
+        }
+
+        if(!again){
+          this.advanceTurn();
+        }else{
+          this.state.dice=null;
+          this.$.diceOut.textContent='–';
+          this.state.legalMoves=[];
+          this.clearTurnTimer();
+          this.beginTurnTimer();
+          this.saveGame();
+          this.updateTurnUI();
+          this.updateTurnPrompt(true);
+          this.maybeAutoPlayIfAI();
+        }
+      }catch(err){
+        console.error?.('[applyMove]',err);
+        throw err;
+      }finally{
+        this.state.animationDepth-=1;
+        if(this.state.animationDepth<=0){
+          this.state.animationDepth=0;
+          this.state.animating=false;
+        }
       }
-    });
-  },
+      return effectResult;
+    },
+    async processPostMoveEffects(move,player,primaryIndex,{markBonus=false}={}){
+      const result={extraRoll:false,skipTurn:false,cancelExtraTurn:false};
+      const effects=Array.isArray(move.effects)?move.effects:[];
+      if(effects.length===0) return result;
+      for(const eff of effects){
+        if(eff.type==='portal'){ continue; }
+        if(eff.type==='powerup'){
+          if(eff.effect==='extraRoll'){
+            result.extraRoll=true;
+            this.showToast(`${player.name} 獲得額外擲骰！`, markBonus?1400:1800);
+          }else if(eff.effect==='forward2'){
+            this.showToast(`${player.name} 加速前進 +2 格！`, markBonus?1400:2000);
+            const nested=await this.performAutoMove(player,primaryIndex,2,{reason:'powerup-forward2'});
+            if(nested){
+              if(nested.extraRoll) result.extraRoll=true;
+              if(nested.skipTurn) result.skipTurn=true;
+              if(nested.cancelExtraTurn) result.cancelExtraTurn=true;
+            }
+          }else if(eff.effect==='assist'){
+            const nested=await this.performAssistStep(player,primaryIndex);
+            if(nested){
+              this.showToast(`${player.name} 僚機支援前進！`, markBonus?1400:2200);
+              if(nested.extraRoll) result.extraRoll=true;
+              if(nested.skipTurn) result.skipTurn=true;
+              if(nested.cancelExtraTurn) result.cancelExtraTurn=true;
+            }else{
+              this.log(`${player.name} 嘗試呼叫僚機，但沒有棋子可移動`);
+              this.showToast('僚機暫未能支援',1400);
+            }
+          }
+        }else if(eff.type==='trap'){
+          if(eff.effect==='grounded'){
+            if(!this.state.skipTurn) this.state.skipTurn={};
+            this.state.skipTurn[player.id]=(this.state.skipTurn[player.id]||0)+1;
+            result.skipTurn=true;
+            result.cancelExtraTurn=true;
+            this.showToast(`${player.name} 進廠檢修，下回合將被跳過`,2200);
+          }else if(eff.effect==='stall'){
+            const returned=await this.sendPieceToBase(player,primaryIndex);
+            result.cancelExtraTurn=true;
+            this.showToast(returned?`${player.name} 遭遇亂流，被迫回基地`:`${player.name} 遭遇亂流`,2000);
+          }
+        }
+      }
+      return result;
+    },
+    async performAutoMove(player,pieceIndex,steps,{reason='auto'}={}){
+      if(!player || typeof steps!=='number' || steps===0) return null;
+      const pid=player.id;
+      const pieces=this.state.pieces[pid]||[];
+      const piece=pieces[pieceIndex];
+      if(!piece || !piece.pos) return null;
+      const occ=window.GameRules.buildOccupancy({players:this.state.players,pieces:this.state.pieces});
+      const sim=window.GameRules.simulateMove(player,piece.pos,steps,this.state.rules,occ);
+      if(!sim || !sim.legal) return null;
+      const autoMove={
+        pieceIndex,
+        kind:reason,
+        dice:steps,
+        from:piece.pos,
+        to:sim.final,
+        events:sim.events,
+        effects:sim.effects,
+        capture:sim.capture,
+        stack:[pieceIndex]
+      };
+      return this.applyMove(autoMove,'system',{skipHistory:true,suppressTurnAdvance:true,markBonus:true});
+    },
+    async performAssistStep(player,excludeIndex){
+      if(!player) return null;
+      const pid=player.id;
+      const pieces=this.state.pieces[pid]||[];
+      const occ=window.GameRules.buildOccupancy({players:this.state.players,pieces:this.state.pieces});
+      const candidates=[];
+      const distToFinish=(pos)=>{
+        const homeLen=window.GameRules.BOARD.homeLane.length;
+        const entry=window.GameRules.BOARD.homeLane.entryIndex[player.color];
+        const L=window.GameRules.BOARD.track.length;
+        if(!pos) return 999;
+        if(pos.kind==='finished') return 0;
+        if(pos.kind==='home') return Math.max(0,homeLen-1-pos.idx);
+        if(pos.kind==='track'){
+          const d=((entry-pos.idx)%L+L)%L;
+          return d+(homeLen-1);
+        }
+        return 999;
+      };
+      pieces.forEach((pc,idx)=>{
+        if(idx===excludeIndex) return;
+        if(!pc || !pc.pos || pc.pos.kind==='base' || pc.pos.kind==='finished') return;
+        const sim=window.GameRules.simulateMove(player,pc.pos,1,this.state.rules,occ);
+        if(sim && sim.legal){
+          candidates.push({idx,sim});
+        }
+      });
+      if(candidates.length===0) return null;
+      candidates.sort((a,b)=>distToFinish(a.sim.final)-distToFinish(b.sim.final));
+      const chosen=candidates[0];
+      this.log(`${player.name} 呼叫僚機支援，${chosen.idx+1} 號棋前進 1 格`);
+      return this.performAutoMove(player,chosen.idx,1,{reason:'powerup-assist'});
+    },
+    async sendPieceToBase(player,pieceIndex){
+      if(!player) return false;
+      const pid=player.id;
+      const pieces=this.state.pieces[pid]||[];
+      const piece=pieces[pieceIndex];
+      if(!piece || !piece.pos || piece.pos.kind==='base') return false;
+      const from=this.posToXY(player.color,piece.pos,pieceIndex);
+      const slot=typeof piece.baseSlot==='number'?piece.baseSlot:pieceIndex;
+      const basePos=window.GameRules.Pos.base(slot);
+      const target=this.posToXY(player.color,basePos,pieceIndex);
+      if(typeof this.state.animationDepth!=='number') this.state.animationDepth=0;
+      this.state.animationDepth+=1;
+      try{
+        if(from && target){
+          await this.animatePiece(player,from,target,this.getAnimDuration(400));
+        }
+      }finally{
+        this.state.animationDepth-=1;
+      }
+      piece.baseSlot=slot;
+      piece.pos=basePos;
+      this.redrawPieces();
+      this.showThreatBadge(target?.x||0,target?.y||0,[]);
+      return true;
+    },
     advanceTurn(){
       if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
       if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); this._noMoveTimer=null; }
-      const currentIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
-      const next=(currentIdx<0?0:(currentIdx+1)%this.state.players.length);
+      const players=this.state.players;
+      const skipMap=this.state.skipTurn||{};
+      let idx=players.findIndex(p=>p.id===this.state.turn);
+      if(idx<0) idx=-1;
+      let loops=0;
+      let nextPlayer=null;
+      while(loops<players.length){
+        idx=(idx+1)%players.length;
+        const candidate=players[idx];
+        const skipCount=skipMap[candidate.id]||0;
+        if(skipCount>0){
+          skipMap[candidate.id]=skipCount-1;
+          this.log(`${candidate.name} 正在檢修，略過一回合`);
+          loops+=1;
+          continue;
+        }
+        nextPlayer=candidate;
+        break;
+      }
+      if(!nextPlayer){
+        nextPlayer=players[(idx+1)%players.length];
+      }
       const prevId=this.state.turn;
-      const nextId=this.state.players[next].id;
       if(prevId!=null && this.state.consecutiveSixes){ this.state.consecutiveSixes[prevId]=0; }
-      this.state.turn=nextId;
-      if(this.state.consecutiveSixes){ this.state.consecutiveSixes[nextId]=0; }
+      if(!this.state.skipTurn) this.state.skipTurn={};
+      this.state.turn=nextPlayer.id;
+      if(this.state.consecutiveSixes){ this.state.consecutiveSixes[nextPlayer.id]=0; }
       this.state.dice=null;
       this.state.legalMoves=[];
       this.$.diceOut.textContent='–';
@@ -1391,7 +1753,7 @@
     },
 
     // --------- Persistence / Undo ---------
-    snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules,dice:this.state.dice,consecutiveSixes:this.state.consecutiveSixes})); },
+    snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules,dice:this.state.dice,consecutiveSixes:this.state.consecutiveSixes,skipTurn:this.state.skipTurn})); },
     saveGame(){ try{ localStorage.setItem('ac_save_v1', JSON.stringify(this.snapshot())); }catch(e){} },
     loadGame(){ try{ const s=localStorage.getItem('ac_save_v1'); return s?JSON.parse(s):null; }catch(e){ return null; } },
     clearSave(){ try{ localStorage.removeItem('ac_save_v1'); }catch(e){} },
@@ -1406,6 +1768,9 @@
       this.state.rules=loadedRules;
       this.state.dice=snapshot.dice??null;
       this.state.consecutiveSixes=snapshot.consecutiveSixes||{};
+      this.state.skipTurn=snapshot.skipTurn||{};
+      this.state.animationDepth=0;
+      this.state.players.forEach(p=>{ if(p && p.id!=null && typeof this.state.skipTurn[p.id]!=='number') this.state.skipTurn[p.id]=0; });
       this.state.history=[];
       this.normalizePieces();
       this.updateControlAssignments();
@@ -1437,7 +1802,8 @@
       this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules;
       this.normalizePlayerControls();
       this.updateControlAssignments();
-      this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
+      this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{}; this.state.skipTurn=snap.skipTurn||{}; this.state.animationDepth=0;
+      this.state.players.forEach(p=>{ if(p && p.id!=null && typeof this.state.skipTurn[p.id]!=='number') this.state.skipTurn[p.id]=0; });
       this.normalizePieces();
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
       this.clearTurnTimer();
@@ -1500,6 +1866,9 @@
         if((m.events||[]).some(e=>e.type==='enter-home')) score+=400;
         if((m.events||[]).some(e=>e.type==='jump')) score+=140;
         if((m.events||[]).some(e=>e.type==='flight')) score+=90;
+        if((m.events||[]).some(e=>e.type==='powerup')) score+=160;
+        if((m.events||[]).some(e=>e.type==='portal')) score+=60;
+        if((m.events||[]).some(e=>e.type==='trap')) score-=220;
         if(m.kind==='takeoff') score+=80;
         if(m.to.kind==='track' && isSafeTile(player.color,m.to.idx)) score+=60;
         if(m.to.kind==='track'){
