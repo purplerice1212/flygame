@@ -215,6 +215,7 @@
         <select id="keyboard-mode">
           <option value="shared" selected>共享模式：1–4 選棋、Space 擲骰</option>
           <option value="dual">雙人熱座：P1=1–4、P2=7–0</option>
+          <option value="custom">自訂：依玩家卡片設定</option>
         </select>
       </label>
       <label>主題
@@ -261,6 +262,13 @@
           <select data-type>
             <option value="human" selected>人類</option>
             <option value="ai">AI</option>
+          </select>
+        </label>
+        <label>控制
+          <select data-control>
+            <option value="auto" selected>自動（依模式）</option>
+            <option value="keyboard">鍵盤</option>
+            <option value="mouse">滑鼠</option>
           </select>
         </label>
       </div>
@@ -587,8 +595,11 @@
       const mode=this.state.settings.keyboardMode||'shared';
       const map={};
       this.state.players.forEach((player,idx)=>{
+        const pref=(player.control==='keyboard'||player.control==='mouse')?player.control:'auto';
+        if(pref==='keyboard'||pref==='mouse'){ map[player.id]=pref; return; }
         if(mode==='shared'){ map[player.id]='keyboard'; }
         else if(mode==='dual'){ map[player.id]=(idx<=1?'keyboard':'mouse'); }
+        else if(mode==='custom'){ map[player.id]='keyboard'; }
         else { map[player.id]='mouse'; }
       });
       this.state.controlById=map;
@@ -635,11 +646,11 @@
       const playerIndex=this.state.players.findIndex(p=>p.id===player.id);
       if(control==='keyboard'){
         if(stage==='roll') hints.push('按 Space 擲骰 🎲');
-        if(mode==='shared'){ hints.push('用 1–4 選棋'); }
+        if(mode==='shared' || mode==='custom'){ hints.push('用 1–4 選棋'); }
         else if(mode==='dual'){
           if(playerIndex===0) hints.push('P1：用 1–4 選棋');
           else if(playerIndex===1) hints.push('P2：用 7–0 選棋');
-          else hints.push('此玩家以滑鼠操作');
+          else hints.push('自選鍵盤：用 1–4 選棋');
         }
         if(stage==='move'){
           if(moveCount>0) hints.push('選擇數字鍵執行移動');
@@ -802,6 +813,8 @@
         node.querySelector('[data-name]').value = i===0?'Mandy':(i===1?'Brian':'');
         node.querySelector('[data-color]').value = colors[i%colors.length];
         node.querySelector('[data-type]').value = (i<2?'human':'ai');
+        const controlSelect=node.querySelector('[data-control]');
+        if(controlSelect){ controlSelect.value='auto'; }
         host.appendChild(node);
       }
     },
@@ -838,12 +851,29 @@
         this.state.pieces[player.id]=pcs;
       }
     },
+    normalizePlayerControls(){
+      if(!Array.isArray(this.state.players)) return;
+      this.state.players=this.state.players.map(player=>{
+        if(!player || typeof player!=='object') return player;
+        const control=(player.control==='keyboard'||player.control==='mouse')?player.control:'auto';
+        return Object.assign({},player,{control});
+      });
+    },
     startGame(){
       // players
       const cards=this.$.playerList.querySelectorAll('[data-player-card]'); const players=[]; const seen=new Set();
-      cards.forEach((card,idx)=>{ const name=card.querySelector('[data-name]').value||`玩家${idx+1}`; const color=card.querySelector('[data-color]').value; const type=card.querySelector('[data-type]').value||'human'; if(seen.has(color)) return; seen.add(color); players.push({id:`P${idx+1}`,name,color,type}); });
+      cards.forEach((card,idx)=>{
+        const name=card.querySelector('[data-name]').value||`玩家${idx+1}`;
+        const color=card.querySelector('[data-color]').value;
+        const type=card.querySelector('[data-type]').value||'human';
+        const controlRaw=card.querySelector('[data-control]')?.value||'auto';
+        const control=(controlRaw==='keyboard'||controlRaw==='mouse')?controlRaw:'auto';
+        if(seen.has(color)) return;
+        seen.add(color);
+        players.push({id:`P${idx+1}`,name,color,type,control});
+      });
       if(players.length<2){ this.log('至少需要 2 位玩家'); return; }
-      this.state.players=players; this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
+      this.state.players=players; this.normalizePlayerControls(); this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       this.state.consecutiveSixes={};
       this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
@@ -1334,31 +1364,26 @@
       if(this.state.view!=='game' || this.state.animating) return;
       if(e.key==='u'||e.key==='U'){ this.undo(); return; }
       if(!this.isInteractionPermitted('keyboard')){ this.handleBlockedInteraction('keyboard'); return; }
-      const mode=this.state.settings.keyboardMode;
+      const mode=this.state.settings.keyboardMode||'shared';
       const pIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
       const pieces=this.state.pieces[this.state.turn]||[];
       const pieceCount=pieces.length;
-      if(e.code==='Space'){
+      if(e.code==='Space' || e.key===' ' || e.key==='Spacebar'){
         e.preventDefault();
         this.rollDice('keyboard');
         return;
       }
       let selIndex=null;
-      if(mode==='shared'){
-        const keys=['1','2','3','4','5','6','7','8','9'];
-        const idx=keys.indexOf(e.key);
-        if(idx>-1 && idx<pieceCount) selIndex=idx;
-      } else if(mode==='dual'&&this.state.players.length>=2){
-        if(pIdx===0){
-          const keys=['1','2','3','4'];
-          const idx=keys.indexOf(e.key);
-          if(idx>-1 && idx<pieceCount) selIndex=idx;
-        } else if(pIdx===1){
-          const keys=['7','8','9','0'];
-          const idx=keys.indexOf(e.key);
-          if(idx>-1 && idx<pieceCount) selIndex=idx;
+      const keyPool=(()=>{
+        if(mode==='dual'){
+          if(pIdx===0) return ['1','2','3','4'];
+          if(pIdx===1) return ['7','8','9','0'];
+          return ['1','2','3','4','5','6','7','8','9'];
         }
-      }
+        return ['1','2','3','4','5','6','7','8','9'];
+      })();
+      const idx=keyPool.indexOf(e.key);
+      if(idx>-1 && idx<pieceCount) selIndex=idx;
       if(selIndex!=null){
         const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
         if(mv) this.applyMove(mv,'keyboard');
@@ -1374,6 +1399,7 @@
       const snapshot=data||this.loadGame();
       if(!snapshot){ this.log('冇儲存對局'); return; }
       this.state.players=snapshot.players||[];
+      this.normalizePlayerControls();
       this.state.pieces=snapshot.pieces||{};
       this.state.turn=snapshot.turn||null;
       const loadedRules=snapshot.rules? Object.assign({}, window.GameRules.DEFAULT_RULES, snapshot.rules) : window.GameRules.DEFAULT_RULES;
@@ -1409,6 +1435,8 @@
       const snap=this.state.history?.pop?.();
       if(!snap){ this.log('無可 Undo 嘅步'); return; }
       this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules;
+      this.normalizePlayerControls();
+      this.updateControlAssignments();
       this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
       this.normalizePieces();
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
