@@ -584,66 +584,101 @@
       const NS='http://www.w3.org/2000/svg'; const css=getComputedStyle(document.documentElement); const color=(name)=>css.getPropertyValue(name).trim();
       const geom=this.geom={track:[],home:{},bases:{}};
       const el=(n,a={},ch=[])=>{ const node=document.createElementNS(NS,n); for(const [k,v] of Object.entries(a)) node.setAttribute(k,v); ch.forEach(c=>node.appendChild(c)); return node; };
-      const ringPoint=(i,total=window.GameRules.BOARD.track.length)=>{ const a=(Math.PI*2)*(i/total)-Math.PI/2; const kx=Math.cos(a),ky=Math.sin(a); const rx=r*(0.85+0.15*Math.pow(Math.sin(a*2),2)); const ry=r*(0.85+0.15*Math.pow(Math.cos(a*2),2)); return [cx+kx*rx, cy+ky*ry]; };
+      const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
+      const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
+      const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
+      const ringPoint=(i,total=window.GameRules.BOARD.track.length)=>{ const a=(Math.PI*2)*(i/total)-Math.PI/2; const radius=r-20; return{ x:cx+Math.cos(a)*radius, y:cy+Math.sin(a)*radius, angle:a }; };
       gGrid.appendChild(el('circle',{cx,cy,r:r+60,fill:'#0a0a0a',stroke:color('--tile-grid'),'stroke-width':2,opacity:.5}));
       const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJump=window.GameRules.BOARD.special.ownColorJump.indices;
-      const tint=(idx)=> ownJump.red.includes(idx)?'var(--red-ghost)': ownJump.blue.includes(idx)?'var(--blue-ghost)': ownJump.yellow.includes(idx)?'var(--yellow-ghost)': ownJump.green.includes(idx)?'var(--green-ghost)':'transparent';
-      for(let i=0;i<total;i++){ const [x,y]=ringPoint(i); geom.track[i]={x,y}; const s=44; gTiles.appendChild(el('rect',{x:x-s/2,y:y-s/2,width:s,height:s,rx:10,fill:tint(i),stroke:color('--tile-grid'),'stroke-width':2})); if(Object.values(entryIdx).includes(i)) gSpecials.appendChild(el('path',{d:`M ${x-10} ${y} l 10 -8 l 0 16 Z M ${x+6} ${y} l 10 -8 l 0 16 Z`,fill:'#e5e7eb',opacity:.8})); if(Object.values(startIdx).includes(i)) gSpecials.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'#e5e7eb'})); }
-      const flights=window.GameRules.BOARD.special.flightPaths.edges; for(const [ck,edges] of Object.entries(flights)){ for(const e of edges){ const {x:x1,y:y1}=geom.track[e.from]; const {x:x2,y:y2}=geom.track[e.to]; const mx=(x1+x2)/2,my=(y1+y2)/2; gSpecials.appendChild(el('path',{d:`M ${x1} ${y1} Q ${mx} ${my-80} ${x2} ${y2}`,stroke:`var(--${ck})`,'stroke-width':4,fill:'none',opacity:.7})); gSpecials.appendChild(el('polygon',{points:`${x2},${y2} ${x2-6},${y2-14} ${x2+6},${y2-14}`,fill:`var(--${ck})`,opacity:.9})); } }
-      const lanes=[{color:'red',angle:-90},{color:'blue',angle:0},{color:'yellow',angle:90},{color:'green',angle:180}]; const homeLen=window.GameRules.BOARD.homeLane.length;
-      lanes.forEach(L=>{ const ang=L.angle*Math.PI/180,ux=Math.cos(ang),uy=Math.sin(ang),baseR=r-30,step=48; geom.home[L.color]=[]; for(let i=0;i<homeLen;i++){ const x=cx+ux*(baseR-i*step), y=cy+uy*(baseR-i*step); geom.home[L.color][i]={x,y}; const s=44; const fill=i===homeLen-1?`var(--${L.color})`:'transparent'; const stroke=i===homeLen-1?`var(--${L.color})`:color('--tile-grid'); gTiles.appendChild(el('rect',{x:x-s/2,y:y-s/2,width:s,height:s,rx:10,fill,stroke,'stroke-width':2})); }});
+      const defs=el('defs'); svg.insertBefore(defs, svg.firstChild);
+      const jumpPatterns={};
+      const ensureJumpPattern=(col)=>{
+        if(jumpPatterns[col]) return jumpPatterns[col];
+        const hex=color(`--${col}`); const pattern=el('pattern',{id:`jump-${col}`,patternUnits:'userSpaceOnUse',width:10,height:10});
+        pattern.appendChild(el('rect',{width:10,height:10,fill:withAlpha(hex,0.12)}));
+        pattern.appendChild(el('circle',{cx:3,cy:3,r:1.4,fill:withAlpha(hex,0.35)}));
+        pattern.appendChild(el('circle',{cx:8,cy:8,r:1.2,fill:withAlpha(hex,0.28)}));
+        defs.appendChild(pattern); jumpPatterns[col]=pattern; return pattern;
+      };
+      const ownJumpLookup={}; Object.entries(ownJump).forEach(([col,arr])=>arr.forEach(idx=>{ ownJumpLookup[idx]=col; }));
+      const tileSize=44;
+      for(let i=0;i<total;i++){
+        const {x,y,angle}=ringPoint(i); geom.track[i]={x,y,angle};
+        const attrs={x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:'transparent',stroke:color('--tile-grid'),'stroke-width':2};
+        const jumpCol=ownJumpLookup[i];
+        if(jumpCol){ const hex=color(`--${jumpCol}`); attrs.fill=mixWithWhite(hex,0.15); attrs['fill-opacity']=0.9; attrs.stroke=withAlpha(hex,0.6); attrs['stroke-width']=2.5; }
+        gTiles.appendChild(el('rect',attrs));
+        if(jumpCol){ ensureJumpPattern(jumpCol); gTiles.appendChild(el('rect',{x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:`url(#jump-${jumpCol})`,opacity:0.5})); }
+      }
+      const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
+      const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
+      for(let i=0;i<total;i++){
+        const {x,y}=geom.track[i];
+        if(entryIndexByColor[i]!=null){
+          const col=entryIndexByColor[i];
+          const entry={x,y};
+          const dir={x:cx-entry.x,y:cy-entry.y};
+          const len=Math.hypot(dir.x,dir.y)||1; const ux=dir.x/len,uy=dir.y/len;
+          const outward={x:-ux,y:-uy};
+          const tip={x:entry.x+ux*(tileSize*0.28), y:entry.y+uy*(tileSize*0.28)};
+          const baseCenter={x:entry.x+outward.x*(tileSize*0.32), y:entry.y+outward.y*(tileSize*0.32)};
+          const perp={x:-uy,y:ux}; const baseHalf=tileSize*0.22;
+          const p1={x:baseCenter.x+perp.x*baseHalf,y:baseCenter.y+perp.y*baseHalf};
+          const p2={x:baseCenter.x-perp.x*baseHalf,y:baseCenter.y-perp.y*baseHalf};
+          gSpecials.appendChild(el('polygon',{points:`${tip.x},${tip.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`,fill:withAlpha(color(`--${col}`),0.85)}));
+        }
+        if(startIndexByColor[i]!=null){
+          const col=startIndexByColor[i];
+          const dotRadius=tileSize*0.18; const ringRadius=tileSize*0.32;
+          const hex=color(`--${col}`);
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:ringRadius,stroke:withAlpha(hex,0.5),'stroke-width':3,fill:'transparent'}));
+          gSpecials.appendChild(el('circle',{cx:x,cy:y,r:dotRadius,fill:hex}));
+        }
+      }
+      const flights=window.GameRules.BOARD.special.flightPaths.edges; const flightGroup=el('g',{});
+      const bezierTangent=(t,p0,p1,p2)=>{ const mt=1-t; return{ x:2*mt*(p1.x-p0.x)+2*t*(p2.x-p1.x), y:2*mt*(p1.y-p0.y)+2*t*(p2.y-p1.y) }; };
+      for(const [ck,edges] of Object.entries(flights)){
+        const strokeColor=color(`--${ck}`);
+        for(const e of edges){
+          const p0=geom.track[e.from]; const p2=geom.track[e.to];
+          const mid={x:(p0.x+p2.x)/2,y:(p0.y+p2.y)/2};
+          const vec={x:p2.x-p0.x,y:p2.y-p0.y}; const segLen=Math.hypot(vec.x,vec.y)||1; const unit={x:vec.x/segLen,y:vec.y/segLen};
+          let normal={x:-unit.y,y:unit.x};
+          const midFromCenter={x:mid.x-cx,y:mid.y-cy};
+          if(normal.x*midFromCenter.x+normal.y*midFromCenter.y<0){ normal={x:-normal.x,y:-normal.y}; }
+          const k=0.32; const control={x:mid.x+normal.x*(segLen*k), y:mid.y+normal.y*(segLen*k)};
+          const path=el('path',{d:`M ${p0.x} ${p0.y} Q ${control.x} ${control.y} ${p2.x} ${p2.y}`,stroke:strokeColor,'stroke-width':4,fill:'none',opacity:.78,'stroke-linecap':'round'});
+          flightGroup.appendChild(path);
+          const tTip=0.985; const arrowTip={x:p2.x,y:p2.y};
+          const tan=bezierTangent(tTip,p0,control,p2); const tanLen=Math.hypot(tan.x,tan.y)||1; const tanUnit={x:tan.x/tanLen,y:tan.y/tanLen};
+          const arrowLen=12; const baseCenter={x:arrowTip.x-tanUnit.x*arrowLen,y:arrowTip.y-tanUnit.y*arrowLen};
+          const normalVec={x:-tanUnit.y,y:tanUnit.x}; const arrowWidth=12;
+          const c1={x:baseCenter.x+normalVec.x*(arrowWidth/2),y:baseCenter.y+normalVec.y*(arrowWidth/2)};
+          const c2={x:baseCenter.x-normalVec.x*(arrowWidth/2),y:baseCenter.y-normalVec.y*(arrowWidth/2)};
+          const arrow=el('polygon',{points:`${arrowTip.x},${arrowTip.y} ${c1.x},${c1.y} ${c2.x},${c2.y}`,fill:strokeColor,opacity:.9});
+          flightGroup.appendChild(arrow);
+        }
+      }
+      gSpecials.appendChild(flightGroup);
+      const homeLen=window.GameRules.BOARD.homeLane.length; Object.entries(entryIdx).forEach(([col,idx])=>{
+        const entry=geom.track[idx]; const dir={x:cx-entry.x,y:cy-entry.y}; const len=Math.hypot(dir.x,dir.y)||1; const ux=dir.x/len,uy=dir.y/len;
+        const spacing=tileSize+10; const offset=tileSize*0.6;
+        geom.home[col]=[];
+        for(let i=0;i<homeLen;i++){
+          const dist=offset+i*spacing;
+          const x=entry.x+ux*dist; const y=entry.y+uy*dist;
+          geom.home[col][i]={x,y};
+          const fill=i===homeLen-1?`var(--${col})`:'transparent';
+          const stroke=i===homeLen-1?`var(--${col})`:color('--tile-grid');
+          gTiles.appendChild(el('rect',{x:x-tileSize/2,y:y-tileSize/2,width:tileSize,height:tileSize,rx:10,fill,stroke,'stroke-width':2}));
+        }
+      });
       gGrid.appendChild(el('rect',{x:cx-60,y:cy-60,width:120,height:120,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:color('--tile-grid'),'stroke-width':2}));
       const baseDefs={red:{dx:-350,dy:-350},blue:{dx:350,dy:-350},yellow:{dx:350,dy:350},green:{dx:-350,dy:350}};
-      for(const [col,{dx,dy}] of Object.entries(baseDefs)){ const group=el('g',{}); const x=cx+dx,y=cy+dy,w=180,h=180; group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:22,fill:`var(--${col})`,opacity:.08,stroke:`var(--${col})`,'stroke-width':2})); const slots=[]; for(let i=-1;i<=1;i+=2){ for(let j=-1;j<=1;j+=2){ const sx=x+i*40,sy=y+j*40; slots.push({x:sx,y:sy}); group.appendChild(el('circle',{cx:sx,cy:sy,r:22,fill:'none',stroke:`var(--${col})`,'stroke-width':2,opacity:.8})); } } geom.bases[col]=slots; gGrid.appendChild(group); }
+      for(const [col,{dx,dy}] of Object.entries(baseDefs)){ const group=el('g',{}); const x=cx+dx,y=cy+dy,w=180,h=180; group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:22,fill:`var(--${col})`,opacity:.14,stroke:`var(--${col})`,'stroke-width':2})); const slots=[]; for(let i=-1;i<=1;i+=2){ for(let j=-1;j<=1;j+=2){ const sx=x+i*40,sy=y+j*40; slots.push({x:sx,y:sy}); group.appendChild(el('circle',{cx:sx,cy:sy,r:22,fill:'none',stroke:`var(--${col})`,'stroke-width':2,opacity:.8})); } } geom.bases[col]=slots; gGrid.appendChild(group); }
       gGrid.appendChild(el('circle',{cx,cy,r:r+150,fill:'none',stroke:'#000','stroke-width':140,opacity:.35}));
-    },
-
-    // --------- UI helpers ---------
-    log(msg){ const div=document.createElement('div'); const t=new Date().toLocaleTimeString(); div.textContent=`[${t}] ${msg}`; this.$.log.prepend(div); },
-    currentPlayer(){ return this.state.players.find(p=>p.id===this.state.turn); },
-    updateTurnUI(){ this.$.turn.textContent=`當前：${this.currentPlayer().name}`; },
-
-    // --------- Game Flow ---------
-    rollDice(){
-      if(this.state.animating) return;
-      const v=1+Math.floor(Math.random()*6);
-      this.$.diceOut.textContent=v;
-      this.state.dice=v;
-
-      const st={turn:this.state.turn,players:this.state.players,pieces:this.state.pieces};
-      const rules=this.state.rules||window.GameRules.DEFAULT_RULES;
-
-      this.state.legalMoves=window.GameRules.generateLegalMoves(st,rules,v);
-      this.highlightMovables();
-      this.log(`${this.currentPlayer().name} 擲到 ${v}`);
-
-      if((this.state.legalMoves||[]).length===0){
-        const me=this.currentPlayer();
-        const myPieces=this.state.pieces[me.id]||[];
-        const anyAtBase=myPieces.some(pc=>pc.pos.kind==='base');
-        if(anyAtBase && !window.GameRules.canTakeoffWith(v,rules)){
-          this.log('（提示）需要指定骰面先可以起飛');
-        }else{
-          this.log('（提示）本回合沒有合法步，直接交棒');
-        }
-
-        const again=(v===6 && rules.extraTurnOnSix);
-        if(again){
-          this.log('擲到 6：再擲一次');
-          this.state.dice=null;
-          this.$.diceOut.textContent='–';
-          this.state.legalMoves=[];
-          this.highlightMovables();
-          this.updateTurnUI();
-          this.maybeAutoPlayIfAI();
-        }else{
-          this.advanceTurn();
-        }
-        return;
-      }
-
-      if(this.isAI(this.currentPlayer())) this.maybeAutoPlayIfAI();
-    },
+    }
+,
     highlightMovables(){
       const g=this.$.gHL; g.innerHTML='';
       const host=this.$.movables; host.innerHTML='';
