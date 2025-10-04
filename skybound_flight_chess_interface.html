@@ -480,7 +480,7 @@
       this.$.btnLobby.addEventListener('click',()=>this.toLobby());
       this.$.btnRoll.addEventListener('click',()=>this.rollDice());
       this.$.btnUndo.addEventListener('click',()=>this.undo());
-      this.$.btnRestart.addEventListener('click',()=>{ this.clearSave(); this.toLobby(); });
+      this.$.btnRestart.addEventListener('click',()=>this.restartGame());
       $('#btn-settings').addEventListener('click',()=>$('#dialog-settings').showModal());
       $('#btn-about').addEventListener('click',()=>$('#dialog-about').showModal());
       this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); });
@@ -536,11 +536,46 @@
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
       }
       this.normalizePieces();
-      this.state.legalMoves=[]; this.state.animating=false;
+      this.state.legalMoves=[]; this.state.animating=false; this.state.dice=null;
+      this.$.diceOut.textContent='–';
+      this.$.movables.innerHTML='';
+      this.$.gHL.innerHTML='';
+      this.$.log.innerHTML='';
       this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.saveGame(); this.log('遊戲開始！'); this.maybeAutoPlayIfAI();
+      this.$.btnContinue.disabled=false;
     },
     toGame(){ this.$.viewLobby.hidden=true; this.$.viewGame.hidden=false; this.state.view='game'; },
     toLobby(){ this.$.viewLobby.hidden=false; this.$.viewGame.hidden=true; this.state.view='lobby'; },
+
+    restartGame(){
+      if(!Array.isArray(this.state.players) || this.state.players.length<2){
+        this.log('未有進行中的對局');
+        return;
+      }
+      const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
+      this.state.pieces={};
+      for(const p of this.state.players){
+        this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
+      }
+      this.normalizePieces();
+      this.state.turn=this.state.players[0].id;
+      this.state.history=[];
+      this.state.legalMoves=[];
+      this.state.animating=false;
+      this.state.dice=null;
+      this.$.diceOut.textContent='–';
+      this.$.movables.innerHTML='';
+      this.$.gHL.innerHTML='';
+      this.$.log.innerHTML='';
+      this.toGame();
+      this.bootstrapBoard();
+      this.redrawPieces();
+      this.updateTurnUI();
+      this.saveGame();
+      this.log('已重開新局');
+      this.maybeAutoPlayIfAI();
+      this.$.btnContinue.disabled=false;
+    },
 
     // --------- Board Rendering ---------
     bootstrapBoard(){
