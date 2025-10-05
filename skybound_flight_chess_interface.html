@@ -540,12 +540,33 @@
             }
           }
         } else if(current.kind==='home'){
+          const laneLength=BOARD.homeLane.length;
           const next=current.idx+1;
-          if(next<BOARD.homeLane.length){ current=Pos.home(next); remaining-=1; stepsTaken+=1; recordPosition(current); }
-          else {
+          if(next<laneLength){
+            current=Pos.home(next);
+            remaining-=1;
+            stepsTaken+=1;
+            recordPosition(current);
+          } else {
             if(rules.finishExact==='exact') return {legal:false,reason:'need-exact-to-finish',events};
             if(rules.finishExact==='noMoveIfOver') return {legal:false,reason:'no-move-if-over',events};
-            if(rules.finishExact==='bounceBack'){ const last=BOARD.homeLane.length-1; const over=next-last; const idx=last-(over-1); current=Pos.home(idx); remaining-=1; stepsTaken+=1; recordPosition(current); }
+            if(rules.finishExact==='bounceBack'){
+              const last=laneLength-1;
+              let overshoot=remaining;
+              let idx=current.idx;
+              let direction=-1;
+              while(overshoot>0){
+                let nextIdx=idx+direction;
+                if(nextIdx<0){ direction=1; nextIdx=idx+direction; }
+                if(nextIdx>last){ direction=-1; nextIdx=idx+direction; }
+                idx=nextIdx;
+                current=Pos.home(idx);
+                recordPosition(current);
+                stepsTaken+=1;
+                overshoot-=1;
+              }
+              remaining=0;
+            }
           }
         } else if(current.kind==='base' || current.kind==='finished'){
           return {legal:false,reason:'invalid-start',events};
@@ -635,6 +656,7 @@
   const SVG_NS='http://www.w3.org/2000/svg';
   const SAVE_KEY='ac_save_v1';
   const SAVE_VERSION='skybound-variant-v2';
+  const $ = (selector)=>document.querySelector(selector);
   const App = {
     state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{} },
     geom:{ track:[], home:{}, bases:{} },
@@ -663,7 +685,6 @@
         gBack:$('#layer-background'), gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gHud:$('#layer-hud'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
         boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order')
       };
-      function $(sel){ return document.querySelector(sel); }
     },
     hasSavedGame(){
       try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
@@ -682,7 +703,8 @@
           this.rollDice('keyboard');
           return;
         }
-        if(event instanceof PointerEvent){
+        const hasPointerEvents = typeof PointerEvent!=='undefined';
+        if(hasPointerEvents && event instanceof PointerEvent){
           const pointerType = event.pointerType;
           if(pointerType==='mouse' || pointerType==='pen'){
             this.rollDice('mouse');
