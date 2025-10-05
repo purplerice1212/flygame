@@ -115,6 +115,11 @@
       #turn-banner{transition:opacity .1s ease;transform:none}
       .toast-message{transition:opacity .1s ease;transform:none}
     }
+    dialog::backdrop{background:rgba(15,23,42,0.72);backdrop-filter:blur(2px)}
+    dialog[data-fallback-open="true"]{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:transparent;border:none;z-index:1000}
+    dialog[data-fallback-open="true"]::before{content:"";position:fixed;inset:0;background:rgba(15,23,42,0.72);backdrop-filter:blur(2px);z-index:0}
+    dialog[data-fallback-open="true"] > *{position:relative;z-index:1;margin:0 auto;max-width:90vw}
+    body[data-dialog-open="true"]{overflow:hidden}
   </style>
 </head>
 <body>
@@ -124,9 +129,9 @@
       <span class="muted">MVP</span>
     </div>
     <nav aria-label="global">
-      <button class="btn" id="btn-lobby">返回大廳</button>
-      <button class="btn" id="btn-settings" aria-haspopup="dialog" aria-controls="dialog-settings">設定</button>
-      <button class="btn" id="btn-about" aria-haspopup="dialog" aria-controls="dialog-about">說明</button>
+      <button class="btn" id="btn-lobby" type="button">返回大廳</button>
+      <button class="btn" id="btn-settings" type="button" aria-haspopup="dialog" aria-controls="dialog-settings">設定</button>
+      <button class="btn" id="btn-about" type="button" aria-haspopup="dialog" aria-controls="dialog-about">說明</button>
     </nav>
   </header>
 
@@ -227,7 +232,7 @@
           <div class="row" style="margin-top:12px">
             <button type="submit" class="btn" id="btn-start">開始遊戲</button>
             <button type="button" class="btn" id="btn-quick">快速開始（經典）</button>
-            <button type="button" class="btn" id="btn-continue" disabled>繼續上局</button>
+            <button type="button" class="btn" id="btn-continue" disabled aria-disabled="true">繼續上局</button>
           </div>
         </form>
       </div>
@@ -258,7 +263,7 @@
           <span id="timer" class="muted" aria-live="polite"></span>
         </div>
         <div class="row" style="margin-top:8px">
-          <button class="btn" id="btn-roll" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
+          <button class="btn" id="btn-roll" type="button" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
           <output id="dice-output" aria-live="polite" class="pill" role="status">–</output>
         </div>
         <div id="toast-host" aria-live="polite"></div>
@@ -268,7 +273,7 @@
           <p id="last-move-summary" class="muted">尚未有移動記錄。</p>
           <p id="last-move-meta" class="last-move-meta"></p>
           <ul id="last-move-captured"></ul>
-          <button class="btn" type="button" id="btn-replay-last" disabled>重播上一步</button>
+          <button class="btn" type="button" id="btn-replay-last" disabled aria-disabled="true">重播上一步</button>
         </section>
         <div style="margin-top:12px">
           <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
@@ -279,8 +284,8 @@
           <div id="log" class="log" role="log" aria-live="polite"></div>
         </div>
         <div class="row" style="margin-top:12px">
-          <button class="btn" id="btn-undo">Undo</button>
-          <button class="btn" id="btn-restart">重開局</button>
+          <button class="btn" id="btn-undo" type="button">Undo</button>
+          <button class="btn" id="btn-restart" type="button">重開局</button>
         </div>
         <section id="specials-legend" aria-label="特殊格圖例" style="margin-top:12px">
           <h3 class="section-title" style="font-size:1rem">特殊格圖例</h3>
@@ -737,6 +742,52 @@
   const SAVE_KEY='ac_save_v1';
   const SAVE_VERSION='skybound-variant-v2';
   const $ = (selector)=>document.querySelector(selector);
+  const supportsDialog = (()=>{
+    try{
+      const dlg=document.createElement('dialog');
+      return typeof dlg.showModal==='function';
+    }catch(e){ return false; }
+  })();
+  const openDialogSafe = (dialog)=>{
+    if(!dialog) return;
+    if(supportsDialog && typeof dialog.showModal==='function'){
+      dialog.showModal();
+      return;
+    }
+    dialog.setAttribute('open','');
+    dialog.setAttribute('data-fallback-open','true');
+    if(document.body) document.body.setAttribute('data-dialog-open','true');
+  };
+  const closeDialogSafe = (dialog)=>{
+    if(!dialog) return;
+    if(supportsDialog && typeof dialog.close==='function'){
+      dialog.close();
+      return;
+    }
+    dialog.removeAttribute('data-fallback-open');
+    dialog.removeAttribute('open');
+    if(document.body && !document.querySelector('dialog[data-fallback-open="true"]')){
+      document.body.removeAttribute('data-dialog-open');
+    }
+  };
+  const attachDialogFallback = (dialog)=>{
+    if(!dialog) return;
+    if(!(supportsDialog && typeof dialog.showModal==='function')){
+      dialog.addEventListener('click',evt=>{ if(evt.target===dialog) closeDialogSafe(dialog); });
+      dialog.addEventListener('submit',evt=>{ evt.preventDefault(); closeDialogSafe(dialog); });
+    }else{
+      dialog.addEventListener('cancel',()=>{ if(document.body) document.body.removeAttribute('data-dialog-open'); });
+      dialog.addEventListener('close',()=>{ if(document.body) document.body.removeAttribute('data-dialog-open'); });
+    }
+  };
+  if(!supportsDialog){
+    document.addEventListener('keydown',evt=>{
+      if(evt.key==='Escape'){
+        const active=document.querySelector('dialog[data-fallback-open="true"]');
+        if(active){ evt.preventDefault(); closeDialogSafe(active); }
+      }
+    });
+  }
   const App = {
     state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
     geom:{ track:[], home:{}, bases:{}, runway:{}, finishedSlots:{} },
@@ -756,7 +807,7 @@
       this.updateViewVisibility();
       this.updateBoardOverlay();
       this.updateSpecialsLegend();
-      if(this.hasSavedGame()) this.$.btnContinue.disabled=false;
+      if(this.hasSavedGame()) this.setButtonDisabled(this.$.btnContinue,false);
       window.addEventListener('resize',()=>this.onResize());
     },
     cache(){
@@ -770,8 +821,27 @@
         theme:$('#theme'), rulesAdvanced:$('#rules-advanced'), lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last')
       };
     },
+    setButtonDisabled(button, disabled){
+      if(!button) return;
+      button.disabled=!!disabled;
+      button.setAttribute('aria-disabled', disabled?'true':'false');
+    },
     hasSavedGame(){
-      try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
+      try{
+        const raw=localStorage.getItem(SAVE_KEY);
+        if(!raw) return false;
+        const parsed=JSON.parse(raw);
+        if(parsed && typeof parsed==='object' && parsed.state){
+          const isCompatible = parsed.version===SAVE_VERSION && parsed.board===window.GameRules?.BOARD?.boardSpecVersion;
+          if(!isCompatible){
+            try{ localStorage.removeItem(SAVE_KEY); }catch(err){}
+            this.setButtonDisabled(this.$?.btnContinue,true);
+            return false;
+          }
+          return true;
+        }
+        return !!parsed;
+      }catch(e){ return false; }
     },
     bind(){
       if(this._bound) return;
@@ -827,8 +897,12 @@
           this.updateBoardOverlay();
         });
       }
-      $('#btn-settings').addEventListener('click',()=>$('#dialog-settings').showModal());
-      $('#btn-about').addEventListener('click',()=>$('#dialog-about').showModal());
+      const settingsDialog=$('#dialog-settings');
+      const aboutDialog=$('#dialog-about');
+      attachDialogFallback(settingsDialog);
+      attachDialogFallback(aboutDialog);
+      $('#btn-settings').addEventListener('click',()=>openDialogSafe(settingsDialog));
+      $('#btn-about').addEventListener('click',()=>openDialogSafe(aboutDialog));
       this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); this.updateControlAssignments(); this.renderHints(); this.updateTurnPrompt(true); });
       if(!this._handleKeyDown){
         this._handleKeyDown=e=>this.onKey(e);
@@ -1092,7 +1166,7 @@
         if(summaryEl){ summaryEl.textContent='尚未有移動記錄。'; summaryEl.classList.add('muted'); }
         if(metaEl){ metaEl.textContent=''; metaEl.hidden=true; }
         if(capturedEl){ capturedEl.innerHTML=''; capturedEl.hidden=true; }
-        if(button) button.disabled=true;
+        if(button) this.setButtonDisabled(button,true);
         resetStyles();
         return;
       }
@@ -1129,7 +1203,7 @@
           capturedEl.hidden=true;
         }
       }
-      if(button) button.disabled=false;
+      if(button) this.setButtonDisabled(button,false);
       card.dataset.empty='false';
       card.dataset.hasSummary='true';
       const accentVar=player.color?`var(--${player.color})`:'var(--accent)';
@@ -1272,9 +1346,9 @@
     updateTurnUI(){
       const player=this.currentPlayer();
       this.$.turn.textContent=player?`當前：${player.name}`:'當前：—';
-      this.$.btnRoll.disabled=this.state.animating||this.state.dice!=null;
+      this.setButtonDisabled(this.$.btnRoll,this.state.animating||this.state.dice!=null);
       const canUndo=!!(this.state.rules?.undoEnabled && Array.isArray(this.state.history) && this.state.history.length>0);
-      this.$.btnUndo.disabled=!canUndo;
+      this.setButtonDisabled(this.$.btnUndo,!canUndo);
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
       if(player && this.state.turnTimerId==null && this.state.dice==null){
         this.beginTurnTimer();
@@ -1437,7 +1511,7 @@
       if(toastMsg) this.showToast(toastMsg);
       this._pendingToast=null;
       this.maybeAutoPlayIfAI();
-      this.$.btnContinue.disabled=false;
+      this.setButtonDisabled(this.$.btnContinue,false);
     },
     toGame(){
       this.state.view='game';
@@ -1519,7 +1593,7 @@
       if(toastMsg) this.showToast(toastMsg);
       this._pendingToast=null;
       this.maybeAutoPlayIfAI();
-      this.$.btnContinue.disabled=false;
+      this.setButtonDisabled(this.$.btnContinue,false);
       this.updateSpecialsLegend();
     },
 
@@ -2663,16 +2737,18 @@
     onKey(e){
       if(this.state.view!=='game' || this.state.animating) return;
       if(e.key==='u'||e.key==='U'){ this.undo(); return; }
+      const isSpace = (e.code==='Space' || e.key===' ' || e.key==='Spacebar');
+      if(isSpace){
+        e.preventDefault();
+        if(!this.isInteractionPermitted('keyboard')){ this.handleBlockedInteraction('keyboard'); return; }
+        this.rollDice('keyboard');
+        return;
+      }
       if(!this.isInteractionPermitted('keyboard')){ this.handleBlockedInteraction('keyboard'); return; }
       const mode=this.state.settings.keyboardMode||'shared';
       const pIdx=this.state.players.findIndex(p=>p.id===this.state.turn);
       const pieces=this.state.pieces[this.state.turn]||[];
       const pieceCount=pieces.length;
-      if(e.code==='Space' || e.key===' ' || e.key==='Spacebar'){
-        e.preventDefault();
-        this.rollDice('keyboard');
-        return;
-      }
       let selIndex=null;
       const keyPool=(()=>{
         if(mode==='dual'){
@@ -2735,7 +2811,7 @@
       const payload={version:SAVE_VERSION, board:window.GameRules?.BOARD?.boardSpecVersion, state:this.snapshot()};
       try{
         localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-        if(this.$?.btnContinue) this.$.btnContinue.disabled=false;
+        this.setButtonDisabled(this.$?.btnContinue,false);
       }catch(e){}
     },
     loadGame(){
@@ -2743,12 +2819,16 @@
         const raw=localStorage.getItem(SAVE_KEY);
         if(!raw) return null;
         const parsed=JSON.parse(raw);
-        if(parsed && typeof parsed==='object' && parsed.state){ return parsed; }
+        if(parsed && typeof parsed==='object' && parsed.state){
+          const isCompatible = parsed.version===SAVE_VERSION && parsed.board===window.GameRules?.BOARD?.boardSpecVersion;
+          if(!isCompatible){ this.clearSave(); return null; }
+          return parsed;
+        }
         return {version:'legacy', state:parsed};
       }catch(e){ return null; }
     },
     clearSave(){
-      try{ localStorage.removeItem(SAVE_KEY); if(this.$?.btnContinue) this.$.btnContinue.disabled=true; }catch(e){}
+      try{ localStorage.removeItem(SAVE_KEY); this.setButtonDisabled(this.$?.btnContinue,true); }catch(e){}
       this.updateBoardOverlay();
     },
     continueFromSave(data=null){
@@ -2798,7 +2878,7 @@
       const toastMsg=this._pendingToast||'已載入上局';
       if(toastMsg) this.showToast(toastMsg);
       this._pendingToast=null;
-      if(this.$?.btnContinue) this.$.btnContinue.disabled=false;
+      this.setButtonDisabled(this.$?.btnContinue,false);
       this.updateSpecialsLegend();
       this.updateBoardOverlay();
       this.maybeAutoPlayIfAI();
