@@ -1594,6 +1594,7 @@
       if(existingDefs) svg.removeChild(existingDefs);
       const defs=document.createElementNS(SVG_NS,'defs');
       svg.insertBefore(defs,svg.firstChild);
+      const el=(n,a={},children=[])=>{ const node=document.createElementNS(SVG_NS,n); for(const [k,v] of Object.entries(a)){ node.setAttribute(k,String(v)); } children.forEach(child=>node.appendChild(child)); return node; };
       const planeShape=el('g',{id:'plane-shape','vector-effect':'non-scaling-stroke'},[
         el('path',{d:'M0,-9 L6,0 L0,-3 L-6,0 Z',fill:'currentColor'}),
         el('rect',{x:-4,y:0,width:8,height:6,rx:2,ry:2,fill:'currentColor'})
@@ -1622,7 +1623,6 @@
       const color=(name)=>css.getPropertyValue(name).trim();
       const geom=this.geom={track:[],home:{},bases:{},runway:{},finishedSlots:{},baseCenters:{},runwayEntry:{}};
       const isCompact=window.matchMedia('(max-width: 959px)').matches;
-      const el=(n,a={},children=[])=>{ const node=document.createElementNS(SVG_NS,n); for(const [k,v] of Object.entries(a)){ node.setAttribute(k,String(v)); } children.forEach(child=>node.appendChild(child)); return node; };
       const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
       const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
       const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
