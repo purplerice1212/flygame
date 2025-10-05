@@ -14,9 +14,21 @@
       --red-ghost:#7f2c42;--blue-ghost:#1b4a5a;--yellow-ghost:#7a6a1a;--green-ghost:#2a5f49;
       --accent:#22d3ee;
     }
+    body[data-theme="light"]{
+      --bg:#f8fafc;--fg:#0f172a;--muted:#475569;--card:#ffffff;--tile-grid:#cbd5f5;
+      --red:#e11d48;--blue:#0ea5e9;--yellow:#f59e0b;--green:#10b981;
+      --red-ghost:rgba(225,29,72,0.12);--blue-ghost:rgba(14,165,233,0.12);--yellow-ghost:rgba(245,158,11,0.15);--green-ghost:rgba(16,185,129,0.12);
+      --accent:#0891b2;
+    }
+    body[data-theme="high"]{
+      --bg:#020617;--fg:#f8fafc;--muted:#f1f5f9;--card:#030712;--tile-grid:#f8fafc;
+      --red:#ff4d6d;--blue:#38bdf8;--yellow:#facc15;--green:#4ade80;
+      --red-ghost:rgba(255,77,109,0.28);--blue-ghost:rgba(56,189,248,0.26);--yellow-ghost:rgba(250,204,21,0.32);--green-ghost:rgba(74,222,128,0.3);
+      --accent:#fbbf24;
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--fg)}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--fg);transition:background .18s ease,color .18s ease}
     .container{max-width:1200px;margin:0 auto;padding:16px}
     .app-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:14px;border:1px solid #1f2937;background:#111827;color:#e5e7eb;cursor:pointer}
@@ -46,6 +58,8 @@
     label{display:flex;align-items:center;gap:8px}
     .row{display:flex;gap:8px;flex-wrap:wrap}
     input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
+    body[data-theme="light"] input[type="text"], body[data-theme="light"] select{background:#e2e8f0;color:#0f172a;border-color:#cbd5f5}
+    body[data-theme="high"] input[type="text"], body[data-theme="high"] select{background:#0f172a;color:#f8fafc;border-color:#38bdf8}
     #turn-banner{position:sticky;top:16px;z-index:20;display:block;padding:10px 18px;border-radius:999px;background:rgba(34,211,238,0.16);color:#0f172a;font-weight:600;border:1px solid rgba(34,211,238,0.35);box-shadow:0 8px 18px rgba(15,23,42,0.35);max-width:fit-content;margin:0 auto 12px auto;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .22s ease}
     #turn-banner[data-show="true"]{opacity:1;transform:translateY(0)}
     #hint-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(15,23,42,0.68);border:1px solid #1f2937;display:flex;flex-direction:column;gap:8px}
@@ -53,6 +67,23 @@
     #hint-card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:#cbd5f5;font-size:.9rem}
     #hint-card .hint-meta{font-size:.8rem;color:var(--muted)}
     #toast-host{pointer-events:none;min-height:26px}
+    #last-move-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.35);display:flex;flex-direction:column;gap:8px;transition:background .18s ease,border-color .18s ease,color .18s ease}
+    #last-move-card[data-empty="true"]{background:rgba(15,23,42,0.4);border-color:rgba(148,163,184,0.35)}
+    #last-move-card[data-has-summary="true"]{background:var(--last-move-accent-soft,rgba(34,211,238,0.16));border-color:var(--last-move-accent,rgba(34,211,238,0.35))}
+    #last-move-card h3{margin:0;font-size:1rem}
+    #last-move-card p{margin:0;line-height:1.4}
+    #last-move-card .last-move-meta{font-size:.82rem;color:var(--muted)}
+    #last-move-card[data-has-summary="true"] .last-move-meta{color:rgba(226,232,240,0.9)}
+    body[data-theme="light"] #last-move-card[data-has-summary="true"] .last-move-meta{color:#334155}
+    #last-move-card .btn{align-self:flex-start;padding:8px 12px;font-size:.85rem}
+    #last-move-captured{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+    #last-move-captured li{padding:4px 8px;border-radius:999px;font-size:.78rem;background:rgba(15,23,42,0.25);color:var(--fg)}
+    body[data-theme="light"] #last-move-card[data-empty="true"]{background:rgba(148,163,184,0.15);border-color:rgba(148,163,184,0.35)}
+    body[data-theme="light"] #last-move-card[data-has-summary="true"]{background:var(--last-move-accent-soft,rgba(8,145,178,0.14));border-color:var(--last-move-accent,rgba(8,145,178,0.35))}
+    body[data-theme="light"] #last-move-captured li{background:rgba(15,23,42,0.08);color:#0f172a}
+    body[data-theme="high"] #last-move-card[data-empty="true"]{background:rgba(15,23,42,0.6);border-color:rgba(248,250,252,0.55)}
+    body[data-theme="high"] #last-move-card[data-has-summary="true"]{background:var(--last-move-accent-soft,rgba(251,191,36,0.28));border-color:var(--last-move-accent,#fbbf24)}
+    body[data-theme="high"] #last-move-captured li{background:rgba(248,250,252,0.18);color:#f8fafc}
     .toast-message{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;margin-top:6px;border-radius:999px;background:rgba(34,211,238,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 14px rgba(8,47,73,0.3);opacity:0;transform:translateY(-4px);transition:opacity .18s ease,transform .22s ease}
     .toast-message[data-show="true"]{opacity:1;transform:translateY(0)}
     body[data-view="lobby"] #view-game aside{opacity:.4;pointer-events:none}
@@ -217,6 +248,13 @@
         </div>
         <div id="toast-host" aria-live="polite"></div>
         <div id="hint-card" aria-live="polite"></div>
+        <section id="last-move-card" aria-live="polite" data-empty="true">
+          <h3 class="section-title" style="font-size:1rem">上一步動作</h3>
+          <p id="last-move-summary" class="muted">尚未有移動記錄。</p>
+          <p id="last-move-meta" class="last-move-meta"></p>
+          <ul id="last-move-captured"></ul>
+          <button class="btn" type="button" id="btn-replay-last" disabled>重播上一步</button>
+        </section>
         <div style="margin-top:12px">
           <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
           <div id="movables" class="list" aria-live="polite"></div>
@@ -460,7 +498,7 @@
       const myPieces = state.pieces[player.id]||[];
       const moves=[];
       const stackInfo=new Map();
-      if(rules.stackMovesTogether){
+      if(rules.stackMovesTogether && rules.stackEnabled!==false){
         const byIdx=new Map();
         myPieces.forEach((piece,idx)=>{
           if(piece.pos?.kind==='track'){
@@ -476,7 +514,7 @@
       myPieces.forEach((piece,i)=>{
         const pos=piece.pos; if(!pos || pos.kind==='finished') return;
         let stackGroup=null;
-        if(rules.stackMovesTogether && pos.kind==='track'){
+        if(rules.stackMovesTogether && rules.stackEnabled!==false && pos.kind==='track'){
           const info=stackInfo.get(pos.idx);
           if(info && info.indices.length>1){
             if(i!==info.leader) return;
@@ -496,14 +534,31 @@
               final=special.final; const eventLog=special.events; const effectsLog=special.effects||[];
               const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight});
               const path=(special.path&&special.path.length?special.path:pathRecord);
-              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i],path});
+              let blockedByAlly=false;
+              if(final.kind==='track' && rules.stackEnabled===false){
+                const occDest=occ.track[final.idx]||{};
+                if((occDest[player.color]||0)>0) blockedByAlly=true;
+              }
+              if(!(capture?.blocked) && !blockedByAlly) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i],path});
             }
           }
           return;
         }
         const sim = simulateMove(player,pos,dice,rules,occ,{recordPath:true});
         if(sim && sim.legal){
-          const group = stackGroup?stackGroup.slice():[i];
+          const allowStack=rules.stackEnabled!==false;
+          const group=(allowStack && stackGroup)?stackGroup.slice():[i];
+          if(sim.final && sim.final.kind==='track' && rules.stackEnabled===false){
+            const occDest=occ.track[sim.final.idx]||{};
+            let allyCount=occDest[player.color]||0;
+            const movingCount=group.reduce((sum,idx2)=>{
+              const mover=myPieces[idx2];
+              if(mover?.pos?.kind==='track' && mover.pos.idx===sim.final.idx) return sum+1;
+              return sum;
+            },0);
+            allyCount=Math.max(0,allyCount-movingCount);
+            if(allyCount>0) return;
+          }
           moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,effects:sim.effects||[],capture:sim.capture,stack:group,path:sim.path||[]});
         }
       });
@@ -658,12 +713,15 @@
   const SAVE_VERSION='skybound-variant-v2';
   const $ = (selector)=>document.querySelector(selector);
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{} },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, lastMoveSummary:null },
     geom:{ track:[], home:{}, bases:{} },
     init(){
       if(this._initialized) return;
       this._initialized=true;
       this.cache(); this.bind();
+      if(this.$.kbMode) this.$.kbMode.value=this.state.settings.keyboardMode||'shared';
+      this.applyTheme();
+      this.renderLastMove();
       this._hudLayers={static:null,dynamic:null};
       this.state.rules=this.cloneDefaultRules();
       this.applyBoardDefaultsToRules();
@@ -683,7 +741,8 @@
         diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'), hintCard:$('#hint-card'), turnBanner:$('#turn-banner'), toast:$('#toast-host'),
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gBack:$('#layer-background'), gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gHud:$('#layer-hud'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
-        boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order')
+        boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order'),
+        theme:$('#theme'), rulesAdvanced:$('#rules-advanced'), lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last')
       };
     },
     hasSavedGame(){
@@ -694,9 +753,26 @@
       this._bound=true;
       this.$.playerCount.addEventListener('change',e=>this.renderLobbyPlayers(parseInt(e.target.value,10)));
       this.$.formSetup.addEventListener('submit',e=>{ e.preventDefault(); this.startGame(); });
+      this.$.formSetup.addEventListener('change',e=>{
+        if(this.$.rulesAdvanced && this.$.rulesAdvanced.contains(e.target)){
+          const custom=this.$.formSetup.querySelector('input[name="preset"][value="custom"]');
+          if(custom) custom.checked=true;
+        }
+      });
       this.$.btnQuick.addEventListener('click',()=>{ this.applyPreset('classic'); this.startGame(); });
       this.$.btnContinue.addEventListener('click',()=>this.continueFromSave());
       this.$.btnLobby.addEventListener('click',()=>this.toLobby());
+      if(this.$.btnReplayLast){
+        this.$.btnReplayLast.addEventListener('click',()=>this.previewLastMove());
+      }
+      if(this.$.theme){
+        this.$.theme.addEventListener('change',e=>{
+          const value=e.target.value||'dark';
+          this.state.settings.theme=value;
+          this.applyTheme();
+          this.log(`主題已切換為：${value==='light'?'淺色':value==='high'?'高對比':'深色'}`);
+        });
+      }
       this.$.btnRoll.addEventListener('click',event=>{
         const isKeyboardActivation = (event instanceof MouseEvent && event.detail===0) || event?.detail===0;
         if(isKeyboardActivation){
@@ -959,6 +1035,86 @@
       host.appendChild(list);
       host.appendChild(meta);
     },
+    applyTheme(){
+      const allowed=['dark','light','high'];
+      const theme=allowed.includes(this.state.settings?.theme)?this.state.settings.theme:'dark';
+      this.state.settings.theme=theme;
+      if(this.$.theme && this.$.theme.value!==theme) this.$.theme.value=theme;
+      document.body.dataset.theme=theme;
+    },
+    renderLastMove(){
+      const card=this.$?.lastMoveCard;
+      if(!card) return;
+      const summaryEl=this.$?.lastMoveSummary;
+      const metaEl=this.$?.lastMoveMeta;
+      const capturedEl=this.$?.lastMoveCaptured;
+      const button=this.$?.btnReplayLast;
+      const summary=this.state.lastMoveSummary;
+      const resetStyles=()=>{
+        card.dataset.empty='true';
+        card.dataset.hasSummary='false';
+        card.style.removeProperty('--last-move-accent');
+        card.style.removeProperty('--last-move-accent-soft');
+      };
+      if(!summary){
+        if(summaryEl){ summaryEl.textContent='尚未有移動記錄。'; summaryEl.classList.add('muted'); }
+        if(metaEl){ metaEl.textContent=''; metaEl.hidden=true; }
+        if(capturedEl){ capturedEl.innerHTML=''; capturedEl.hidden=true; }
+        if(button) button.disabled=true;
+        resetStyles();
+        return;
+      }
+      const colorNameMap={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
+      const player=summary.player||{};
+      const diceText=typeof summary.dice==='number'?`擲出 ${summary.dice}`:'';
+      const desc=summary.description||'完成移動';
+      const colorLabel=colorNameMap[player.color]||player.color||'';
+      if(summaryEl){
+        const colorDisplay=colorLabel?`（${colorLabel}）`:'';
+        const diceDisplay=diceText?` ${diceText}`:'';
+        summaryEl.textContent=`${player.name||'玩家'}${colorDisplay}${diceDisplay}：${desc}`;
+        summaryEl.classList.remove('muted');
+      }
+      const metaBits=[];
+      if(Array.isArray(summary.path) && summary.path.length>0){ metaBits.push(`路徑節點 ${summary.path.length}`); }
+      if(summary.stackSize && summary.stackSize>1){ metaBits.push(`疊子 ×${summary.stackSize}`); }
+      if(metaEl){
+        metaEl.textContent=metaBits.join(' · ');
+        metaEl.hidden=metaBits.length===0;
+      }
+      if(capturedEl){
+        capturedEl.innerHTML='';
+        const capturedList=Array.isArray(summary.captured)?summary.captured:[];
+        if(capturedList.length>0){
+          capturedList.forEach(info=>{
+            const li=document.createElement('li');
+            const label=colorNameMap[info?.color]||info?.color||'敵機';
+            li.textContent=`擊落 ${label}`;
+            capturedEl.appendChild(li);
+          });
+          capturedEl.hidden=false;
+        }else{
+          capturedEl.hidden=true;
+        }
+      }
+      if(button) button.disabled=false;
+      card.dataset.empty='false';
+      card.dataset.hasSummary='true';
+      const accentVar=player.color?`var(--${player.color})`:'var(--accent)';
+      const ghostVar=player.color?`var(--${player.color}-ghost)`:'rgba(34,211,238,0.18)';
+      card.style.setProperty('--last-move-accent',accentVar);
+      card.style.setProperty('--last-move-accent-soft',ghostVar);
+    },
+    previewLastMove(force=false){
+      const summary=this.state.lastMoveSummary;
+      if(!summary || !Array.isArray(summary.path) || summary.path.length===0) return;
+      if(!force){
+        const deciding = (this.state.bonusSelecting===true) || (this.state.dice!=null && Array.isArray(this.state.legalMoves) && this.state.legalMoves.length>0);
+        if(deciding) return;
+      }
+      const pieceIndex=typeof summary.pieceIndex==='number'?summary.pieceIndex:0;
+      this.previewMove({path:summary.path,pieceIndex}, summary.player?.color||null);
+    },
     buildTurnPrompt(){
       const player=this.currentPlayer();
       if(!player) return '';
@@ -1195,6 +1351,7 @@
       this.state.skipTurns={};
       this.state.bonusSelecting=false;
       this.state.pendingBonus=null;
+      this.state.lastMoveSummary=null;
       this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
       if(preset==='custom'){ this.state.rules = this.cloneDefaultRules(this.readRulesFromForm()); this.applyBoardDefaultsToRules(); }
@@ -1211,6 +1368,8 @@
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
+      this.renderLastMove();
+      this.clearGhostPath();
       this.clearTurnTimer();
       this.toGame(); this.bootstrapBoard(); this.redrawPieces(); this.updateTurnUI(); this.updateTurnPrompt(true); this.saveGame(); this.log('遊戲開始！');
       const toastMsg=this._pendingToast||'新局開始，祝你順風！';
@@ -1265,6 +1424,7 @@
       this.state.skipTurns={};
       this.state.bonusSelecting=false;
       this.state.pendingBonus=null;
+      this.state.lastMoveSummary=null;
       for(const p of this.state.players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
         this.state.consecutiveSixes[p.id]=0;
@@ -1280,6 +1440,8 @@
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
+      this.renderLastMove();
+      this.clearGhostPath();
       this.clearTurnTimer();
       this.toGame();
       this.bootstrapBoard();
@@ -1704,13 +1866,35 @@
       poly.classList.add('ghost-path');
       layer.appendChild(poly);
     },
+    clonePosition(pos){
+      if(!pos || typeof pos!=='object') return null;
+      if(pos.kind==='track') return window.GameRules.Pos.track(pos.idx);
+      if(pos.kind==='home') return window.GameRules.Pos.home(pos.idx);
+      if(pos.kind==='base'){
+        const slot=typeof pos.slot==='number'?pos.slot:0;
+        return window.GameRules.Pos.base(slot);
+      }
+      if(pos.kind==='finished') return window.GameRules.Pos.finished();
+      try{
+        return window.structuredClone? structuredClone(pos):JSON.parse(JSON.stringify(pos));
+      }catch(err){
+        if(typeof pos.idx==='number') return {kind:pos.kind,idx:pos.idx};
+        if(typeof pos.slot==='number') return {kind:pos.kind,slot:pos.slot};
+        return {kind:pos.kind};
+      }
+    },
+    clonePath(path){
+      if(!Array.isArray(path)) return [];
+      return path.map(p=>this.clonePosition(p)).filter(Boolean);
+    },
     highlightMovables(){
       const g=this.$.gHL; g.innerHTML='';
       const host=this.$.movables; host.innerHTML='';
       const player=this.currentPlayer(); if(!player) return;
 
       const moves=this.state.legalMoves||[];
-      this.clearGhostPath();
+      const preserveLastPath = (!this.state.bonusSelecting && this.state.dice==null && (!moves || moves.length===0) && Array.isArray(this.state.lastMoveSummary?.path) && this.state.lastMoveSummary.path.length>0);
+      if(preserveLastPath) this.previewLastMove(); else this.clearGhostPath();
       const defaultMove=moves[0]||null;
       const byPiece=new Map();
       moves.forEach(m=>{
@@ -1798,7 +1982,7 @@
         span.className='muted';
         span.textContent='沒有可移動棋子';
         host.appendChild(span);
-        this.clearGhostPath();
+        if(preserveLastPath) this.previewLastMove(); else this.clearGhostPath();
       }else if(moves.length>0){
         host.scrollTop=0;
         if(this.currentControlModeForTurn()==='keyboard' && !host.contains(document.activeElement)){
@@ -1975,6 +2159,32 @@
 
         this.state.animating=false;
 
+        const colorName=this.currentPlayer()?.color||player.color;
+        const baseSummaryPath=this.clonePath(move.path||[]);
+        const fromPos=this.clonePosition(move.from);
+        const toPos=this.clonePosition(move.to);
+        if(fromPos && (baseSummaryPath.length===0 || !window.GameRules.Pos.isEqual(baseSummaryPath[0],fromPos))){
+          baseSummaryPath.unshift(fromPos);
+        }
+        if(toPos && baseSummaryPath.length===0){
+          baseSummaryPath.push(toPos);
+        }
+        if(toPos && baseSummaryPath.length>0 && !window.GameRules.Pos.isEqual(baseSummaryPath[baseSummaryPath.length-1],toPos)){
+          baseSummaryPath.push(toPos);
+        }
+        const summaryCaptured=Array.isArray(move.capture?.captured)?move.capture.captured.map(info=>Object.assign({},info)) : [];
+        this.state.lastMoveSummary={
+          player:{id:player.id,name:player.name,color:colorName},
+          dice:move.dice,
+          description:this.describeMove(move),
+          captured:summaryCaptured,
+          path:baseSummaryPath,
+          pieceIndex:move.pieceIndex,
+          stackSize:Array.isArray(move.stack)?move.stack.length:1,
+          kind:move.kind
+        };
+        this.renderLastMove();
+
         if(pendingBonusRequest){
           this.state.pendingBonus=pendingBonusRequest;
           this.state.bonusSelecting=true;
@@ -2009,6 +2219,8 @@
         this.state.pendingBonus=null;
         this.state.dice=null;
         this.$.diceOut.textContent='–';
+        this.state.legalMoves=[];
+        this.previewLastMove();
 
         const rolledValue=move.dice;
         const again=(!wasBonusMove && (((rolledValue===6)&&this.state.rules?.extraTurnOnSix) || extraTurnFromEvent));
@@ -2106,6 +2318,8 @@
       this.state.dice=null;
       this.state.legalMoves=[];
       this.$.diceOut.textContent='–';
+      this.renderLastMove();
+      this.previewLastMove();
       this.clearTurnTimer();
       this.updateTurnUI();
       this.saveGame();
@@ -2137,13 +2351,47 @@
       const idx=keyPool.indexOf(e.key);
       if(idx>-1 && idx<pieceCount) selIndex=idx;
       if(selIndex!=null){
-        const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===selIndex);
-        if(mv) this.applyMove(mv,'keyboard');
+        const movesForPiece=(this.state.legalMoves||[]).filter(m=>m.pieceIndex===selIndex);
+        if(movesForPiece.length===1){
+          this.applyMove(movesForPiece[0],'keyboard');
+        }else if(movesForPiece.length>1){
+          e.preventDefault();
+          const firstMove=movesForPiece[0];
+          const host=this.$?.movables;
+          if(host){
+            const firstBtn=host.querySelector(`button[data-piece="${selIndex}"]`);
+            if(firstBtn){
+              firstBtn.focus();
+              if(firstBtn.scrollIntoView){
+                try{ firstBtn.scrollIntoView({block:'nearest'}); }catch(err){ firstBtn.scrollIntoView(); }
+              }
+            }
+          }
+          if(firstMove){
+            const player=this.currentPlayer();
+            this.previewMove(firstMove,player?.color||null);
+          }
+          this.showToast('此棋有多個選項，選擇後按 Enter/Space 確認',1600);
+        }
       }
     },
 
     // --------- Persistence / Undo ---------
-    snapshot(){ return JSON.parse(JSON.stringify({players:this.state.players,pieces:this.state.pieces,turn:this.state.turn,rules:this.state.rules,dice:this.state.dice,consecutiveSixes:this.state.consecutiveSixes,skipTurns:this.state.skipTurns,bonusSelecting:this.state.bonusSelecting,pendingBonus:this.state.pendingBonus})); },
+    snapshot(){
+      return JSON.parse(JSON.stringify({
+        players:this.state.players,
+        pieces:this.state.pieces,
+        turn:this.state.turn,
+        rules:this.state.rules,
+        dice:this.state.dice,
+        consecutiveSixes:this.state.consecutiveSixes,
+        skipTurns:this.state.skipTurns,
+        bonusSelecting:this.state.bonusSelecting,
+        pendingBonus:this.state.pendingBonus,
+        settings:this.state.settings,
+        lastMoveSummary:this.state.lastMoveSummary
+      }));
+    },
     saveGame(){
       if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
       const payload={version:SAVE_VERSION, board:window.GameRules?.BOARD?.boardSpecVersion, state:this.snapshot()};
@@ -2169,6 +2417,9 @@
       const payload=data||this.loadGame();
       if(!payload){ this.log('冇儲存對局'); return; }
       const snapshot=payload.state||payload;
+      this.state.settings=Object.assign({keyboardMode:'shared',theme:'dark'}, snapshot.settings||{});
+      this.applyTheme();
+      if(this.$.kbMode) this.$.kbMode.value=this.state.settings.keyboardMode||'shared';
       this.state.players=snapshot.players||[];
       this.normalizePlayerControls();
       this.state.pieces=snapshot.pieces||{};
@@ -2183,8 +2434,10 @@
       this.state.bonusSelecting=!!snapshot.bonusSelecting;
       this.state.pendingBonus=snapshot.pendingBonus||null;
       this.state.history=[];
+      this.state.lastMoveSummary=snapshot.lastMoveSummary||null;
       this.normalizePieces();
       this.updateControlAssignments();
+      this.renderLastMove();
       this.toGame();
       this.bootstrapBoard();
       this.redrawPieces();
@@ -2223,11 +2476,16 @@
       this.normalizePlayerControls();
       this.updateControlAssignments();
       this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
+      this.state.settings=Object.assign({keyboardMode:'shared',theme:'dark'}, snap.settings||{});
+      this.applyTheme();
+      if(this.$.kbMode) this.$.kbMode.value=this.state.settings.keyboardMode||'shared';
+      this.state.lastMoveSummary=snap.lastMoveSummary||null;
       this.normalizePieces();
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
       this.clearTurnTimer();
       this.beginTurnTimer();
       this.redrawPieces(); this.$.gHL.innerHTML='';
+      this.renderLastMove();
       this.updateTurnUI();
       this.saveGame();
       this.log('已撤銷一步');
