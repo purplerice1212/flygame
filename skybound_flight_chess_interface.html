@@ -51,6 +51,21 @@
       svg.board{max-width:min(92vw,640px)}
     }
     .tile-icon{stroke-width:2;vector-effect:non-scaling-stroke}
+    .plane-token{stroke:#0b0f14;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;cursor:pointer;transition:transform .18s ease,filter .18s ease;fill:currentColor;}
+    .plane-red{color:var(--red)}
+    .plane-blue{color:var(--blue)}
+    .plane-yellow{color:var(--yellow)}
+    .plane-green{color:var(--green)}
+    .plane-token.selected{filter:url(#glow);}
+    g[data-finished="true"] .plane-token{opacity:.9;}
+    g[data-disabled="true"] .plane-token{opacity:.4;}
+    g[data-disabled="true"] text{opacity:.4;}
+    .finish-badge circle{fill:rgba(15,23,42,.82);stroke:rgba(255,255,255,.82);stroke-width:2}
+    .runway-tile{fill:rgba(255,255,255,.08);stroke-width:2}
+    .runway-red{stroke:var(--red)}
+    .runway-blue{stroke:var(--blue)}
+    .runway-yellow{stroke:var(--yellow)}
+    .runway-green{stroke:var(--green)}
     .tile-ring{fill:none;stroke-dasharray:4 4}
     .log{height:200px;overflow:auto;border-radius:12px;background:#0b0f14;border:1px solid #1f2937;padding:8px}
     fieldset{border:1px solid #334155;border-radius:12px;padding:12px}
@@ -713,8 +728,8 @@
   const SAVE_VERSION='skybound-variant-v2';
   const $ = (selector)=>document.querySelector(selector);
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, lastMoveSummary:null },
-    geom:{ track:[], home:{}, bases:{} },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
+    geom:{ track:[], home:{}, bases:{}, runway:{}, finishedSlots:{} },
     init(){
       if(this._initialized) return;
       this._initialized=true;
@@ -960,6 +975,8 @@
     isInteractionPermitted(source){
       if(source==='system') return true;
       if(this.isInputLocked()){ return false; }
+      const current=this.currentPlayer();
+      if(current && this.state.disabledColors && this.state.disabledColors[current.id]) return false;
       const globalMode=this.state.settings?.keyboardMode||'shared';
       if(globalMode==='shared') return true;
       const control=this.currentControlModeForTurn();
@@ -1028,9 +1045,14 @@
         if(this.state.rules?.undoEnabled) hints.push('如需撤銷，可點 Undo 按鈕');
       }
       hints.forEach(text=>{ const li=document.createElement('li'); li.textContent=text; list.appendChild(li); });
+      const totalPieces=Math.max(1, window.GameRules?.BOARD?.bases?.perPlayer||1);
+      const playerPieces=this.state.pieces[player.id]||[];
+      const finishedCount=playerPieces.filter(pc=>pc.pos?.kind==='finished').length;
+      const finishIdx=Array.isArray(this.state.finishOrder)?this.state.finishOrder.indexOf(player.id):-1;
+      const finishText=finishedCount>=totalPieces && finishIdx>=0 ? `完成 ${finishedCount}/${totalPieces} · 第 ${finishIdx+1} 名` : `完成 ${finishedCount}/${totalPieces}`;
       const meta=document.createElement('div');
       meta.className='hint-meta';
-      meta.textContent=control==='keyboard'?'此回合鎖定鍵盤操作':'此回合鎖定滑鼠操作';
+      meta.textContent=`${control==='keyboard'?'此回合鎖定鍵盤操作':'此回合鎖定滑鼠操作'} · ${finishText}`;
       host.appendChild(title);
       host.appendChild(list);
       host.appendChild(meta);
@@ -1125,7 +1147,17 @@
       else if(stage==='move') action = control==='keyboard' ? '用數字鍵選棋' : '點擊棋子行動';
       else if(stage==='bonus') action = control==='keyboard' ? '用數字鍵觸發增益' : '選擇棋子完成增益';
       else action='等待下一步';
-      return `${player.name} 的回合 — ${action}`;
+      const totalPieces=Math.max(1, window.GameRules?.BOARD?.bases?.perPlayer||1);
+      const pcs=this.state.pieces[player.id]||[];
+      const finishedCount=pcs.filter(pc=>pc.pos?.kind==='finished').length;
+      let status='';
+      if(finishedCount>=totalPieces){
+        const placeIdx=(Array.isArray(this.state.finishOrder)?this.state.finishOrder.indexOf(player.id):-1);
+        status=placeIdx>=0?`已完成（第 ${placeIdx+1} 名）`:'已完成';
+      }else{
+        status=`完成 ${finishedCount}/${totalPieces}`;
+      }
+      return `${player.name} 的回合 — ${action}（${status}）`;
     },
     showTurnPrompt(message,{duration=2200,force=false,lock=0}={}){
       const host=this.$?.turnBanner; if(!host) return;
@@ -1234,7 +1266,7 @@
       const canUndo=!!(this.state.rules?.undoEnabled && Array.isArray(this.state.history) && this.state.history.length>0);
       this.$.btnUndo.disabled=!canUndo;
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
-      if(this.state.turnTimerId==null && this.state.dice==null){
+      if(player && this.state.turnTimerId==null && this.state.dice==null){
         this.beginTurnTimer();
       }
       this.refreshLegalMoves();
@@ -1306,9 +1338,24 @@
     normalizePieces(){
       for(const player of this.state.players){
         const pcs=Array.isArray(this.state.pieces[player.id])?this.state.pieces[player.id]:[];
+        if(!this.state.finishedSlots) this.state.finishedSlots={};
+        if(!this.state.finishedSlots[player.id]) this.state.finishedSlots[player.id]={};
+        const finishedMap=this.state.finishedSlots[player.id];
         pcs.forEach((pc,idx)=>{
           if(typeof pc.baseSlot!=='number') pc.baseSlot=idx;
           if(pc.pos?.kind==='base' && typeof pc.pos.slot!=='number') pc.pos.slot=pc.baseSlot;
+          if(pc.pos?.kind==='finished'){
+            if(typeof finishedMap[idx]!=='number'){
+              const used=new Set(Object.values(finishedMap));
+              let nextSlot=0;
+              while(used.has(nextSlot) && nextSlot<4){ nextSlot+=1; }
+              finishedMap[idx]=nextSlot;
+            }
+            pc.finishedSlot=finishedMap[idx];
+          }else{
+            if(finishedMap) delete finishedMap[idx];
+            delete pc.finishedSlot;
+          }
         });
         this.state.pieces[player.id]=pcs;
       }
@@ -1352,6 +1399,10 @@
       this.state.bonusSelecting=false;
       this.state.pendingBonus=null;
       this.state.lastMoveSummary=null;
+      this.state.finishOrder=[];
+      this.state.winner=null;
+      this.state.disabledColors={};
+      this.state.finishedSlots={};
       this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
       if(preset==='custom'){ this.state.rules = this.cloneDefaultRules(this.readRulesFromForm()); this.applyBoardDefaultsToRules(); }
@@ -1425,6 +1476,10 @@
       this.state.bonusSelecting=false;
       this.state.pendingBonus=null;
       this.state.lastMoveSummary=null;
+      this.state.finishOrder=[];
+      this.state.winner=null;
+      this.state.disabledColors={};
+      this.state.finishedSlots={};
       for(const p of this.state.players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
         this.state.consecutiveSixes[p.id]=0;
@@ -1539,9 +1594,33 @@
       if(existingDefs) svg.removeChild(existingDefs);
       const defs=document.createElementNS(SVG_NS,'defs');
       svg.insertBefore(defs,svg.firstChild);
+      const planeShape=el('g',{id:'plane-shape','vector-effect':'non-scaling-stroke'},[
+        el('path',{d:'M0,-9 L6,0 L0,-3 L-6,0 Z',fill:'currentColor'}),
+        el('rect',{x:-4,y:0,width:8,height:6,rx:2,ry:2,fill:'currentColor'})
+      ]);
+      defs.appendChild(planeShape);
+      const finishBadge=el('g',{id:'finish-badge'},[
+        el('circle',{r:10,cx:0,cy:0,fill:'rgba(15,23,42,0.82)',stroke:'rgba(255,255,255,0.82)','stroke-width':2}),
+        el('path',{d:'M -4 0 L -1 3 L 5 -3',stroke:'#fff','stroke-width':2.2,fill:'none','stroke-linecap':'round','stroke-linejoin':'round'})
+      ]);
+      defs.appendChild(finishBadge);
+      const glow=el('filter',{id:'glow',x:'-50%',y:'-50%',width:'200%',height:'200%'});
+      const blur=document.createElementNS(SVG_NS,'feGaussianBlur');
+      blur.setAttribute('stdDeviation','3.5');
+      blur.setAttribute('result','coloredBlur');
+      const merge=document.createElementNS(SVG_NS,'feMerge');
+      const mergeNode1=document.createElementNS(SVG_NS,'feMergeNode');
+      mergeNode1.setAttribute('in','coloredBlur');
+      const mergeNode2=document.createElementNS(SVG_NS,'feMergeNode');
+      mergeNode2.setAttribute('in','SourceGraphic');
+      merge.appendChild(mergeNode1);
+      merge.appendChild(mergeNode2);
+      glow.appendChild(blur);
+      glow.appendChild(merge);
+      defs.appendChild(glow);
       const css=getComputedStyle(document.documentElement);
       const color=(name)=>css.getPropertyValue(name).trim();
-      const geom=this.geom={track:[],home:{},bases:{},runway:{}};
+      const geom=this.geom={track:[],home:{},bases:{},runway:{},finishedSlots:{},baseCenters:{},runwayEntry:{}};
       const isCompact=window.matchMedia('(max-width: 959px)').matches;
       const el=(n,a={},children=[])=>{ const node=document.createElementNS(SVG_NS,n); for(const [k,v] of Object.entries(a)){ node.setAttribute(k,String(v)); } children.forEach(child=>node.appendChild(child)); return node; };
       const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
@@ -1803,11 +1882,16 @@
       const slotOffset=isCompact?32:40;
       const slotRadius=isCompact?18:22;
       const baseDefs={red:{dx:-baseOffset,dy:-baseOffset},blue:{dx:baseOffset,dy:-baseOffset},yellow:{dx:baseOffset,dy:baseOffset},green:{dx:-baseOffset,dy:baseOffset}};
-      const runwayGroup=el('g',{});
-      const runwayLength=4;
+      geom.baseRadius=baseSize/2;
+      const runwayLength=(window.GameRules && window.GameRules.BOARD && window.GameRules.BOARD.runwayLength)||4;
+      const runwayPaddingFromBase=14;
+      const runwayTileSize=26;
+      const gRunways=el('g',{class:'runway-layer','pointer-events':'none'});
       for(const [col,{dx,dy}] of Object.entries(baseDefs)){
         const group=el('g',{});
         const x=cx+dx,y=cy+dy,w=baseSize,h=baseSize;
+        geom.baseCenters[col]={x,y};
+        geom.runwayEntry[col]=startIdx[col];
         group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:isCompact?18:22,fill:withAlpha(color(`--${col}`),0.18),stroke:withAlpha(color(`--${col}`),0.6),'stroke-width':2}));
         const slots=[];
         for(let i=-1;i<=1;i+=2){
@@ -1820,22 +1904,43 @@
           }
         }
         geom.bases[col]=slots;
-        const startTile=geom.track[startIdx[col]];
+        const finishedSlotSpacing=18;
+        const finishedOffsets=[
+          {x:-finishedSlotSpacing,y:-finishedSlotSpacing},
+          {x: finishedSlotSpacing,y:-finishedSlotSpacing},
+          {x:-finishedSlotSpacing,y: finishedSlotSpacing},
+          {x: finishedSlotSpacing,y: finishedSlotSpacing}
+        ];
+        geom.finishedSlots[col]=finishedOffsets.map(offset=>({x:x+offset.x,y:y+offset.y}));
+        const startIndex=startIdx[col];
+        const startTile=typeof startIndex==='number'?geom.track[startIndex]:null;
+        const runwayTiles=[];
         if(startTile){
-          const vec={x:startTile.x-x,y:startTile.y-y};
-          const segLen=Math.hypot(vec.x,vec.y)||1;
-          const unit={x:vec.x/(runwayLength+1),y:vec.y/(runwayLength+1)};
-          geom.runway[col]=[];
-          for(let step=1;step<=runwayLength;step++){
-            const px=x+unit.x*step;
-            const py=y+unit.y*step;
-            geom.runway[col].push({x:px,y:py});
-            runwayGroup.appendChild(el('rect',{x:px-tileSize/2,y:py-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:withAlpha(color(`--${col}`),0.12),stroke:withAlpha(color(`--${col}`),0.55),'stroke-width':2}));
+          const baseCenter={x,y};
+          const heading=Math.atan2(startTile.y-baseCenter.y,startTile.x-baseCenter.x);
+          const baseRadius=geom.baseRadius||24;
+          const firstOffsetDist=baseRadius+runwayPaddingFromBase;
+          const firstPoint={x:baseCenter.x+Math.cos(heading)*firstOffsetDist,y:baseCenter.y+Math.sin(heading)*firstOffsetDist};
+          const vectorToStart={x:startTile.x-firstPoint.x,y:startTile.y-firstPoint.y};
+          const segCount=Math.max(1,runwayLength-1);
+          for(let i=0;i<runwayLength;i++){
+            const t=(segCount===0)?1:(i/segCount);
+            const px=firstPoint.x+vectorToStart.x*t;
+            const py=firstPoint.y+vectorToStart.y*t;
+            runwayTiles.push({x:px,y:py,heading,slotIndex:i});
           }
         }
+        geom.runway[col]=runwayTiles;
+        runwayTiles.forEach(tile=>{
+          const deg=tile.heading*180/Math.PI;
+          const gTile=el('g',{transform:`translate(${tile.x},${tile.y}) rotate(${deg})`,'data-runway-col':col,'data-runway-slot':String(tile.slotIndex)});
+          const rect=el('rect',{x:-runwayTileSize/2,y:-runwayTileSize/2,width:runwayTileSize,height:runwayTileSize,rx:4,ry:4,class:`runway-tile runway-${col}`,'pointer-events':'none',stroke:withAlpha(color(`--${col}`),0.55)});
+          gTile.appendChild(rect);
+          gRunways.appendChild(gTile);
+        });
         if(gGrid) gGrid.appendChild(group);
       }
-      gSpecials.appendChild(runwayGroup);
+      gSpecials.appendChild(gRunways);
       this.clearGhostPath();
     },
     clearGhostPath(){
@@ -1843,18 +1948,65 @@
       if(!layer) return;
       layer.querySelectorAll('.ghost-path').forEach(node=>node.remove());
     },
+    buildTaxiPath(color,outboundTargetTrackIndex){
+      const runway=(this.geom.runway&&this.geom.runway[color])||[];
+      const path=[];
+      if(Array.isArray(runway)&&runway.length>0){
+        runway.forEach(tile=>{ path.push({x:tile.x,y:tile.y}); });
+      }
+      const finalCoord=(typeof outboundTargetTrackIndex==='number')?this.geom.track[outboundTargetTrackIndex]:outboundTargetTrackIndex;
+      if(finalCoord){
+        const last=path[path.length-1];
+        if(!last || last.x!==finalCoord.x || last.y!==finalCoord.y){
+          path.push({x:finalCoord.x,y:finalCoord.y});
+        }
+      }
+      return path;
+    },
+    resolveMovePath(color,move,pieceIndex,piece=null){
+      const coords=[];
+      const rawPath=Array.isArray(move?.path)?move.path.slice():[];
+      const fromPos=move?.from||piece?.pos||null;
+      const toPos=move?.to||null;
+      if(fromPos && (rawPath.length===0 || !window.GameRules.Pos.isEqual(rawPath[0],fromPos))){
+        rawPath.unshift(fromPos);
+      }
+      if(toPos && (rawPath.length===0 || !window.GameRules.Pos.isEqual(rawPath[rawPath.length-1],toPos))){
+        rawPath.push(toPos);
+      }
+      let skipNextTrack=false;
+      for(let i=0;i<rawPath.length;i++){
+        const pos=rawPath[i];
+        if(skipNextTrack && pos.kind==='track'){ skipNextTrack=false; continue; }
+        const xy=this.posToXY(color,pos,pieceIndex,piece);
+        if(xy) coords.push({x:xy.x,y:xy.y});
+        const next=rawPath[i+1];
+        if(pos.kind==='base' && next && next.kind==='track'){
+          const taxi=this.buildTaxiPath(color,next.idx);
+          taxi.forEach(pt=>coords.push({x:pt.x,y:pt.y}));
+          skipNextTrack=true;
+        }
+      }
+      if(coords.length===0){
+        const start=this.posToXY(color,fromPos||window.GameRules.Pos.base(pieceIndex||0),pieceIndex,piece);
+        if(start) coords.push({x:start.x,y:start.y});
+        const end=this.posToXY(color,toPos||fromPos,pieceIndex,piece);
+        if(end){
+          const last=coords[coords.length-1];
+          if(!last || last.x!==end.x || last.y!==end.y){ coords.push({x:end.x,y:end.y}); }
+        }
+      }
+      return coords;
+    },
     previewMove(move,colorOverride=null){
       const layer=this._hudLayers?.dynamic;
       if(!layer) return;
       this.clearGhostPath();
-      if(!move || !Array.isArray(move.path) || move.path.length===0) return;
+      if(!move) return;
       const playerColor=colorOverride||this.currentPlayer()?.color;
       if(!playerColor) return;
-      const points=[];
-      for(const pos of move.path){
-        const xy=this.posToXY(playerColor,pos,move.pieceIndex);
-        if(xy) points.push(`${xy.x} ${xy.y}`);
-      }
+      const coords=this.resolveMovePath(playerColor,move,move.pieceIndex);
+      const points=coords.map(pt=>`${pt.x} ${pt.y}`);
       if(points.length<2) return;
       const poly=document.createElementNS(SVG_NS,'polyline');
       poly.setAttribute('points',points.join(' '));
@@ -1904,7 +2056,7 @@
 
       const pcs=this.state.pieces[player.id]||[];
       pcs.forEach((pc,idx)=>{
-        const where=this.posToXY(player.color,pc.pos,idx);
+        const where=this.posToXY(player.color,pc.pos,idx,pc);
         if(!where) return;
         const hasMove=byPiece.has(idx);
         const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');
@@ -2013,7 +2165,7 @@
       if(capturedCount>0) parts.push('吃子');
       return parts.join(' → ')||'移動';
     },
-    posToXY(color,pos,pieceIndex=null){
+    posToXY(color,pos,pieceIndex=null,piece=null){
       if(pos.kind==='track') return this.geom.track[pos.idx];
       if(pos.kind==='home') return this.geom.home[color][pos.idx];
       if(pos.kind==='base'){
@@ -2022,6 +2174,17 @@
         const slotFromPos=(typeof pos.slot==='number')?pos.slot:null;
         const idx=(slotFromPos!=null?slotFromPos:(pieceIndex!=null?pieceIndex:0));
         return slots[idx%slots.length];
+      }
+      if(pos.kind==='finished'){
+        const slots=(this.geom.finishedSlots&&this.geom.finishedSlots[color])||[];
+        if(slots.length===0) return null;
+        const player=this.state.players.find(p=>p.color===color);
+        const pid=player?.id;
+        const assigned=pid!=null && this.state.finishedSlots?.[pid]? this.state.finishedSlots[pid][pieceIndex??0]:null;
+        const pieceSlot=(piece && typeof piece.finishedSlot==='number')?piece.finishedSlot:null;
+        const slotIdx=(typeof pos.slot==='number')?pos.slot:(typeof pos.index==='number')?pos.index:(pieceSlot!=null?pieceSlot:(assigned!=null?assigned:pieceIndex||0));
+        const target=slots[(slotIdx||0)%slots.length]||slots[0];
+        if(target) return {x:target.x,y:target.y};
       }
       return null;
     },
@@ -2035,37 +2198,70 @@
         const pid=target.dataset.player;
         const idx=parseInt(target.dataset.index,10);
         if(pid!==this.state.turn||Number.isNaN(idx)) return;
+        if(this.state.disabledColors && this.state.disabledColors[pid]) return;
         const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===idx);
         if(mv) this.applyMove(mv,'mouse');
       };
+      const active=[];
+      const finished=[];
       for(const p of this.state.players){
         const pcs=this.state.pieces[p.id]||[];
         pcs.forEach((pc,idx)=>{
-          const xy=this.posToXY(p.color,pc.pos,idx);
+          const xy=this.posToXY(p.color,pc.pos,idx,pc);
           if(!xy) return;
-          const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
-          c.setAttribute('cx',xy.x);
-          c.setAttribute('cy',xy.y);
-          c.setAttribute('r',18);
-          c.setAttribute('fill',`var(--${p.color})`);
-          c.setAttribute('stroke','#0b0f14');
-          c.setAttribute('stroke-width','3');
-          c.dataset.player=p.id;
-          c.dataset.index=idx;
-          this.$.gPieces.appendChild(c);
-          const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-          t.setAttribute('x',xy.x);
-          t.setAttribute('y',xy.y+4);
-          t.setAttribute('text-anchor','middle');
-          t.setAttribute('font-size','12');
-          t.setAttribute('fill','#0b0f14');
-          t.textContent=String(idx+1);
-          t.dataset.player=p.id;
-          t.dataset.index=idx;
-          t.style.cursor='pointer';
-          this.$.gPieces.appendChild(t);
+          const wrapper=document.createElementNS(SVG_NS,'g');
+          wrapper.dataset.player=p.id;
+          wrapper.dataset.index=String(idx);
+          wrapper.setAttribute('transform',`translate(${xy.x},${xy.y})`);
+          wrapper.style.cursor='pointer';
+          if(this.state.disabledColors && this.state.disabledColors[p.id]){
+            wrapper.setAttribute('data-disabled','true');
+            wrapper.setAttribute('aria-disabled','true');
+          }
+          const token=document.createElementNS(SVG_NS,'use');
+          token.setAttributeNS('http://www.w3.org/1999/xlink','href','#plane-shape');
+          token.setAttribute('href','#plane-shape');
+          token.setAttribute('class',`plane-token plane-${p.color}`);
+          token.setAttribute('data-player',p.id);
+          token.setAttribute('data-index',String(idx));
+          token.setAttribute('role','img');
+          token.setAttribute('aria-label',`${p.name||p.id} 的飛機 ${idx+1}`);
+          token.setAttribute('pointer-events','auto');
+          token.setAttribute('x',-12);
+          token.setAttribute('y',-12);
+          token.setAttribute('width',24);
+          token.setAttribute('height',24);
+          wrapper.appendChild(token);
+          const label=document.createElementNS(SVG_NS,'text');
+          label.setAttribute('x',0);
+          label.setAttribute('y',18);
+          label.setAttribute('text-anchor','middle');
+          label.setAttribute('dominant-baseline','middle');
+          label.setAttribute('font-size','10');
+          label.setAttribute('fill','var(--fg)');
+          label.setAttribute('opacity','0.82');
+          label.textContent=String(idx+1);
+          label.dataset.player=p.id;
+          label.dataset.index=String(idx);
+          label.setAttribute('pointer-events','none');
+          wrapper.appendChild(label);
+          if(pc.pos?.kind==='finished'){
+            wrapper.setAttribute('data-finished','true');
+            const badge=document.createElementNS(SVG_NS,'use');
+            badge.setAttributeNS('http://www.w3.org/1999/xlink','href','#finish-badge');
+            badge.setAttribute('href','#finish-badge');
+            badge.setAttribute('class','finish-badge');
+            badge.setAttribute('transform','translate(14,-14) scale(0.8)');
+            badge.setAttribute('pointer-events','none');
+            wrapper.appendChild(badge);
+            finished.push(wrapper);
+          }else{
+            active.push(wrapper);
+          }
         });
       }
+      active.forEach(node=>g.appendChild(node));
+      finished.forEach(node=>g.appendChild(node));
     },
 
     applyMove(move,source='system'){
@@ -2082,10 +2278,21 @@
       const leadEntry=movingPieces.find(entry=>entry.idx===move.pieceIndex) || movingPieces[0];
       if(!leadEntry){ this.state.animating=false; return; }
       const piece=leadEntry.piece;
-      const fromXY=this.posToXY(player.color,piece.pos,leadEntry.idx);
-      const toXY=this.posToXY(player.color,move.to,leadEntry.idx)||fromXY;
+      const fromXY=this.posToXY(player.color,piece.pos,leadEntry.idx,piece);
+      const toXY=this.posToXY(player.color,move.to,leadEntry.idx,piece)||fromXY;
       this.state.animating=true;
-      this.animatePiece(player,fromXY,toXY,this.getAnimDuration(520)).then(async()=>{
+      const animCoords=this.resolveMovePath(player.color,move,leadEntry.idx,piece);
+      if(Array.isArray(animCoords) && animCoords.length>0){
+        const firstPoint=animCoords[0];
+        if(!firstPoint || firstPoint.x!==fromXY.x || firstPoint.y!==fromXY.y){
+          animCoords.unshift({x:fromXY.x,y:fromXY.y});
+        }
+        const lastPoint=animCoords[animCoords.length-1];
+        if(!lastPoint || lastPoint.x!==toXY.x || lastPoint.y!==toXY.y){
+          animCoords.push({x:toXY.x,y:toXY.y});
+        }
+      }
+      this.animatePiece(player,fromXY,toXY,this.getAnimDuration(520),animCoords).then(async()=>{
         const capturedInfos=[];
         if(move.capture && move.capture.captured && move.capture.captured.length>0 && move.to.kind==='track'){
           for(const opp of this.state.players){
@@ -2103,7 +2310,7 @@
           const from=this.geom.track[move.to.idx];
           const capturedPiece=this.state.pieces[info.opp.id]?.[info.pieceIndex];
           const slotIndex=typeof capturedPiece?.baseSlot==='number'?capturedPiece.baseSlot:info.pieceIndex;
-          const targetBase=this.posToXY(info.opp.color, window.GameRules.Pos.base(slotIndex), slotIndex);
+          const targetBase=this.posToXY(info.opp.color, window.GameRules.Pos.base(slotIndex), slotIndex,capturedPiece);
           if(targetBase){
             await this.animatePiece({color:info.opp.color}, from, targetBase, this.getAnimDuration(420));
           }
@@ -2118,13 +2325,30 @@
           try{ return window.structuredClone? window.structuredClone(target):JSON.parse(JSON.stringify(target)); }catch(e){ return target; }
         };
 
+        if(!this.state.finishedSlots) this.state.finishedSlots={};
+        if(!this.state.finishedSlots[pid]) this.state.finishedSlots[pid]={};
+        const finishedMap=this.state.finishedSlots[pid];
         movingPieces.forEach(({idx,piece:pc})=>{
           const slotIndex=typeof pc.baseSlot==='number'?pc.baseSlot:idx;
           pc.baseSlot=slotIndex;
           if(move.to.kind==='base'){
             pc.pos=window.GameRules.Pos.base(slotIndex);
+            if(finishedMap) delete finishedMap[idx];
+            delete pc.finishedSlot;
           }else{
             pc.pos=toPosition(move.to,slotIndex);
+            if(pc.pos?.kind==='finished'){
+              if(typeof finishedMap[idx]!=='number'){
+                const used=new Set(Object.values(finishedMap));
+                let nextSlot=0;
+                while(used.has(nextSlot) && nextSlot<4){ nextSlot+=1; }
+                finishedMap[idx]=nextSlot;
+              }
+              pc.finishedSlot=finishedMap[idx];
+            }else{
+              if(finishedMap) delete finishedMap[idx];
+              delete pc.finishedSlot;
+            }
           }
         });
 
@@ -2135,6 +2359,8 @@
             const slot=typeof capturedPiece.baseSlot==='number'?capturedPiece.baseSlot:info.pieceIndex;
             capturedPiece.baseSlot=slot;
             capturedPiece.pos=window.GameRules.Pos.base(slot);
+            if(this.state.finishedSlots?.[info.opp.id]) delete this.state.finishedSlots[info.opp.id][info.pieceIndex];
+            delete capturedPiece.finishedSlot;
           }
           this.log(`${player.name} 吃子！把對手送回基地`);
         }
@@ -2146,6 +2372,32 @@
         const effectsOutcome=this.applySpecialEffects({player,move,leadIndex:leadEntry.idx});
         const extraTurnFromEvent=!!effectsOutcome.extraTurn;
         let pendingBonusRequest=effectsOutcome.pendingBonus;
+
+        this.state.finishOrder=this.state.finishOrder||[];
+        this.state.disabledColors=this.state.disabledColors||{};
+        const allPieces=[];
+        this.state.players.forEach(pl=>{
+          (this.state.pieces[pl.id]||[]).forEach(pc=>{
+            allPieces.push({playerId:pl.id,pos:pc?.pos});
+          });
+        });
+        const perPlayerPieces=(window.GameRules?.BOARD?.bases?.perPlayer)||4;
+        const finishedCount=allPieces.reduce((acc,entry)=>{
+          return acc + ((entry.playerId===pid && entry.pos && entry.pos.kind==='finished')?1:0);
+        },0);
+        if(finishedCount>=perPlayerPieces && !this.state.finishOrder.includes(pid)){
+          this.state.finishOrder.push(pid);
+          if(!this.state.winner) this.state.winner=pid;
+          this.state.disabledColors[pid]=true;
+          if(typeof window!=='undefined' && typeof window.showWinnerEffect==='function'){
+            try{ window.showWinnerEffect(pid); }catch(err){ console.warn('showWinnerEffect failed',err); }
+          }
+          if(typeof window!=='undefined' && typeof window.showWinnerModal==='function'){
+            try{ window.showWinnerModal(pid,{finishOrder:this.state.finishOrder}); }catch(err){ /* noop */ }
+          }
+          const emitter=(typeof window!=='undefined' && typeof window.emit==='function')?window.emit:null;
+          if(emitter) emitter('playerFinished',{playerId:pid,finishOrder:this.state.finishOrder});
+        }
 
         this.redrawPieces();
         this.$.gHL.innerHTML='';
@@ -2223,7 +2475,8 @@
         this.previewLastMove();
 
         const rolledValue=move.dice;
-        const again=(!wasBonusMove && (((rolledValue===6)&&this.state.rules?.extraTurnOnSix) || extraTurnFromEvent));
+        const playerFinished=this.state.finishOrder?.includes(pid) || !!this.state.disabledColors?.[pid];
+        const again=(!wasBonusMove && !playerFinished && (((rolledValue===6)&&this.state.rules?.extraTurnOnSix) || extraTurnFromEvent));
         this.renderHints();
         if(!again){
           this.advanceTurn();
@@ -2287,31 +2540,46 @@
       return outcome;
     },
     advanceTurn(){
-      if(!Array.isArray(this.state.players) || this.state.players.length===0) return;
+      const playersList=this.state.players||[];
+      if(!Array.isArray(playersList) || playersList.length===0) return null;
       if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); this._noMoveTimer=null; }
       const prevId=this.state.turn;
-      const playerCount=this.state.players.length;
       if(prevId!=null && this.state.consecutiveSixes){ this.state.consecutiveSixes[prevId]=0; }
-      const currentIdx=this.state.players.findIndex(p=>p.id===prevId);
-      let idx=(currentIdx<0?0:(currentIdx+1)%playerCount);
-      let target=null;
+      const total=playersList.length;
+      this.state.finishOrder=this.state.finishOrder||[];
+      this.state.disabledColors=this.state.disabledColors||{};
+      const currentIdx=playersList.findIndex(p=>p.id===prevId);
+      let idx=(currentIdx<0?0:(currentIdx+1)%total);
       let attempts=0;
-      while(attempts<playerCount){
-        const candidate=this.state.players[idx];
-        const skipCount=Math.max(0,this.state.skipTurns?.[candidate.id]||0);
+      let target=null;
+      while(attempts<total){
+        const candidate=playersList[idx];
+        if(!candidate){ attempts++; idx=(idx+1)%total; continue; }
+        const candidateId=candidate.id;
+        const skipCount=Math.max(0,this.state.skipTurns?.[candidateId]||0);
         if(skipCount>0){
-          this.state.skipTurns[candidate.id]=skipCount-1;
+          this.state.skipTurns[candidateId]=skipCount-1;
           this.log(`${candidate.name} 被亂流困住，跳過此回合`);
           this.showToast(`${candidate.name} 暫停一回合`,1200);
-          attempts+=1;
-          idx=(idx+1)%playerCount;
-          continue;
+          attempts++; idx=(idx+1)%total; continue;
         }
+        const isFinished=this.state.finishOrder.includes(candidateId) || !!this.state.disabledColors[candidateId];
+        if(isFinished){ attempts++; idx=(idx+1)%total; continue; }
         target=candidate;
         break;
       }
       if(!target){
-        target=this.state.players[idx];
+        this.state.turn=null;
+        this.state.dice=null;
+        this.state.legalMoves=[];
+        this.$.diceOut.textContent='–';
+        this.renderLastMove();
+        this.previewLastMove();
+        this.clearTurnTimer();
+        this.updateTurnUI();
+        this.saveGame();
+        this.updateTurnPrompt(true);
+        return null;
       }
       if(this.state.consecutiveSixes){ this.state.consecutiveSixes[target.id]=0; }
       this.state.turn=target.id;
@@ -2325,6 +2593,7 @@
       this.saveGame();
       this.updateTurnPrompt(true);
       this.maybeAutoPlayIfAI();
+      return target;
     },
     onKey(e){
       if(this.state.view!=='game' || this.state.animating) return;
@@ -2389,7 +2658,11 @@
         bonusSelecting:this.state.bonusSelecting,
         pendingBonus:this.state.pendingBonus,
         settings:this.state.settings,
-        lastMoveSummary:this.state.lastMoveSummary
+        lastMoveSummary:this.state.lastMoveSummary,
+        finishOrder:this.state.finishOrder,
+        winner:this.state.winner,
+        disabledColors:this.state.disabledColors,
+        finishedSlots:this.state.finishedSlots
       }));
     },
     saveGame(){
@@ -2435,6 +2708,10 @@
       this.state.pendingBonus=snapshot.pendingBonus||null;
       this.state.history=[];
       this.state.lastMoveSummary=snapshot.lastMoveSummary||null;
+      this.state.finishOrder=Array.isArray(snapshot.finishOrder)?snapshot.finishOrder.slice():[];
+      this.state.winner=snapshot.winner||null;
+      this.state.disabledColors=Object.assign({},snapshot.disabledColors||{});
+      this.state.finishedSlots=JSON.parse(JSON.stringify(snapshot.finishedSlots||{}));
       this.normalizePieces();
       this.updateControlAssignments();
       this.renderLastMove();
@@ -2476,6 +2753,11 @@
       this.normalizePlayerControls();
       this.updateControlAssignments();
       this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
+      this.state.skipTurns=snap.skipTurns||{};
+      this.state.finishOrder=Array.isArray(snap.finishOrder)?snap.finishOrder.slice():[];
+      this.state.winner=snap.winner||null;
+      this.state.disabledColors=Object.assign({},snap.disabledColors||{});
+      this.state.finishedSlots=JSON.parse(JSON.stringify(snap.finishedSlots||{}));
       this.state.settings=Object.assign({keyboardMode:'shared',theme:'dark'}, snap.settings||{});
       this.applyTheme();
       if(this.$.kbMode) this.$.kbMode.value=this.state.settings.keyboardMode||'shared';
@@ -2596,7 +2878,7 @@
     },
 
     // --------- Anim / Effects ---------
-    animatePiece(player,from,to,duration=480){ duration=this.getAnimDuration(duration); return new Promise(resolve=>{ const g=this.$.gHL; if(!g){ resolve(); return; } const NS='http://www.w3.org/2000/svg'; const ghost=document.createElementNS(NS,'circle'); ghost.setAttribute('cx',from.x); ghost.setAttribute('cy',from.y); ghost.setAttribute('r',18); ghost.setAttribute('fill',`var(--${player.color})`); ghost.setAttribute('stroke','#0b0f14'); ghost.setAttribute('stroke-width','3'); g.appendChild(ghost); const t0=performance.now(); const ease=t=>1-Math.pow(1-t,3); const step=(now)=>{ const p=Math.min(1,(now-t0)/duration), e=ease(p); const x=from.x+(to.x-from.x)*e, y=from.y+(to.y-from.y)*e; ghost.setAttribute('cx',x); ghost.setAttribute('cy',y); if(p<1) requestAnimationFrame(step); else { if(ghost.parentNode) ghost.parentNode.removeChild(ghost); resolve(); } }; requestAnimationFrame(step); }); },
+    animatePiece(player,from,to,duration=480,path=null){ duration=this.getAnimDuration(duration); return new Promise(resolve=>{ const g=this.$.gHL; if(!g){ resolve(); return; } const NS='http://www.w3.org/2000/svg'; const ghost=document.createElementNS(NS,'circle'); ghost.setAttribute('cx',from.x); ghost.setAttribute('cy',from.y); ghost.setAttribute('r',18); ghost.setAttribute('fill',`var(--${player.color})`); ghost.setAttribute('stroke','#0b0f14'); ghost.setAttribute('stroke-width','3'); g.appendChild(ghost); const coords=Array.isArray(path)&&path.length>1?path.map(pt=>({x:pt.x,y:pt.y})):[{x:from.x,y:from.y},{x:to.x,y:to.y}]; if(coords.length<2){ coords.push({x:to.x,y:to.y}); } const segments=[]; for(let i=0;i<coords.length-1;i++){ const start=coords[i]; const end=coords[i+1]; const len=Math.hypot(end.x-start.x,end.y-start.y); segments.push({start,end,len:len||0.0001}); } if(segments.length===0){ if(ghost.parentNode) ghost.parentNode.removeChild(ghost); resolve(); return; } const totalLen=segments.reduce((acc,seg)=>acc+seg.len,0)||1; const ease=t=>1-Math.pow(1-t,3); const t0=performance.now(); const step=(now)=>{ const raw=Math.min(1,(now-t0)/duration); const eased=ease(raw); const targetDist=totalLen*eased; let traversed=0; let segmentIndex=0; while(segmentIndex<segments.length-1 && traversed+segments[segmentIndex].len<targetDist){ traversed+=segments[segmentIndex].len; segmentIndex++; } const segment=segments[segmentIndex]; const segLen=segment.len||1; const local=(segLen===0)?1:Math.min(1,(targetDist-traversed)/segLen); const x=segment.start.x+(segment.end.x-segment.start.x)*local; const y=segment.start.y+(segment.end.y-segment.start.y)*local; ghost.setAttribute('cx',x); ghost.setAttribute('cy',y); if(raw<1){ requestAnimationFrame(step); }else{ if(ghost.parentNode) ghost.parentNode.removeChild(ghost); resolve(); } }; requestAnimationFrame(step); }); },
     pulseAt(x,y,color){ const g=this.$.gHL; if(!g) return; const NS='http://www.w3.org/2000/svg'; const ring=document.createElementNS(NS,'circle'); ring.setAttribute('cx',x); ring.setAttribute('cy',y); ring.setAttribute('r','8'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',color); ring.setAttribute('stroke-width','3'); ring.setAttribute('opacity','0.9'); g.appendChild(ring); let r=8; const id=setInterval(()=>{ r+=4; ring.setAttribute('r',r); const op=parseFloat(ring.getAttribute('opacity')); ring.setAttribute('opacity',String(Math.max(0,op-0.12))); if(r>36){ clearInterval(id); if(ring.parentNode) ring.parentNode.removeChild(ring);} },16); },
     computeThreatFaces(targetIdx){ const L=window.GameRules.BOARD.track.length; const me=this.currentPlayer(); const faces=new Set(); for(const opp of this.state.players){ if(opp.id===me.id) continue; const oppPieces=this.state.pieces[opp.id]||[]; for(const pc of oppPieces){ if(pc.pos.kind!=='track') continue; const d=((targetIdx-pc.pos.idx)%L+L)%L; if(d>=1&&d<=6) faces.add(d); } } return Array.from(faces).sort((a,b)=>a-b); },
     showThreatBadge(x,y,faces){ const g=this.$.gHL; g.querySelectorAll('.threat-badge').forEach(n=>n.remove()); if(!faces||faces.length===0) return; const NS='http://www.w3.org/2000/svg'; const bx=x+26,by=y-26; const badge=document.createElementNS(NS,'g'); badge.setAttribute('class','threat-badge'); const rect=document.createElementNS(NS,'rect'); const label=faces.join('/'); const padding=6; const width=Math.max(24,label.length*7+padding*2); rect.setAttribute('x',bx-width/2); rect.setAttribute('y',by-10); rect.setAttribute('width',width); rect.setAttribute('height',20); rect.setAttribute('rx',6); rect.setAttribute('fill','#ef4444'); rect.setAttribute('stroke','#000'); rect.setAttribute('stroke-width','2'); const txt=document.createElementNS(NS,'text'); txt.setAttribute('x',bx); txt.setAttribute('y',by+5); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.setAttribute('fill','#0b0f14'); txt.textContent=label; badge.appendChild(rect); badge.appendChild(txt); g.appendChild(badge); }
