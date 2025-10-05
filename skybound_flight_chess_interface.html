@@ -607,6 +607,10 @@
             if(allowEntry){
               current=Pos.home(0); recordPosition(current);
               events.push({type:'enter-home'});
+              if(remaining>0){
+                remaining-=1;
+                stepsTaken+=1;
+              }
             }
           }
         } else if(current.kind==='home'){
