@@ -829,7 +829,7 @@
       const view=this.state.view||'lobby';
       document.body.dataset.view=view;
       if(this.$?.viewLobby) this.$.viewLobby.hidden = (view!=='lobby');
-      if(this.$?.viewGame) this.$.viewGame.hidden = false;
+      if(this.$?.viewGame) this.$.viewGame.hidden = (view!=='game');
     },
     updateBoardOverlay(){
       const overlay=this.$?.boardOverlay; if(!overlay) return;
