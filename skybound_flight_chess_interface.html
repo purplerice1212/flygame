@@ -2501,16 +2501,23 @@
       if(moves.length===0) return null;
       const rules=this.state.rules||window.GameRules.DEFAULT_RULES;
       const distToFinish=(color,pos)=>{
-        const L=window.GameRules.BOARD.track.length;
-        const entry=window.GameRules.BOARD.homeLane.entryIndex[color];
-        const homeLen=window.GameRules.BOARD.homeLane.length;
+        const BOARD=window.GameRules.BOARD;
+        const L=BOARD.track.length;
+        const entry=BOARD.homeLane.entryIndex[color];
+        const homeLen=BOARD.homeLane.length;
         if(pos.kind==='finished') return 0;
         if(pos.kind==='home') return (homeLen-1-pos.idx);
         if(pos.kind==='track'){
           const dToEntry=((entry-pos.idx)%L+L)%L;
-          return dToEntry+1+(homeLen-1);
+          const enterHomeStep=(dToEntry===0)?1:0;
+          return dToEntry+enterHomeStep+(homeLen-1);
         }
-        return 999;
+        if(pos.kind==='base'){
+          const start=BOARD.track.startIndex[color];
+          const startDist=distToFinish(color,window.GameRules.Pos.track(start));
+          return startDist+1; // include the takeoff step from base to the start tile
+        }
+        return 0;
       };
       const isSafeTile=(color,idx)=>{
         const start=window.GameRules.BOARD.track.startIndex[color];
@@ -2537,7 +2544,11 @@
         const beforePos=myPieces[m.pieceIndex]?.pos||window.GameRules.Pos.base();
         const before=distToFinish(player.color,beforePos);
         const after=distToFinish(player.color,m.to);
-        let score=(before-after)*4;
+        const progress=Math.max(0,before-after);
+        // Weight raw progress so that large advances matter, but a single-step takeoff
+        // no longer eclipses finish/capture bonuses now that base distance is normalized.
+        const PROGRESS_WEIGHT=60;
+        let score=progress*PROGRESS_WEIGHT;
         const cap=(m.capture&&(m.capture.captured||[]).length)||0;
         score+=cap*1000;
         if(m.to.kind==='finished') score+=900;
@@ -2546,6 +2557,9 @@
         if((m.events||[]).some(e=>e.type==='flight')) score+=90;
         if(m.kind==='takeoff') score+=80;
         if(m.to.kind==='track' && isSafeTile(player.color,m.to.idx)) score+=60;
+        const specials=[...(m.events||[]),...(m.effects||[])];
+        if(specials.some(e=>e?.type==='trap')) score-=500;
+        if(specials.some(e=>e?.type==='power-up')) score+=150;
         if(m.to.kind==='track'){
           const prob=captureRiskProb(player.color,m.to.idx);
           score-=prob*700;
