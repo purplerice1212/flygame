@@ -723,6 +723,7 @@
             const card=target.closest('[data-player-card]');
             this.syncPlayerCardColor(card);
           }
+          this.updateBoardOverlay();
         });
       }
       $('#btn-settings').addEventListener('click',()=>$('#dialog-settings').showModal());
@@ -747,10 +748,35 @@
         overlay.textContent='🗺️ 棋盤預覽 — 有儲存對局，可按「繼續上局」或重新開局';
         return;
       }
-      let configured=this.$?.playerList?.querySelectorAll('[data-player-card]').length||0;
-      if(configured===0 && Array.isArray(this.state.players)) configured=this.state.players.length;
-      if(configured>=2){
-        overlay.textContent=`🗺️ 棋盤預覽 — ${configured} 位玩家準備就緒，按「開始遊戲」起飛`;
+      const cardNodes=this.$?.playerList?.querySelectorAll('[data-player-card]')||[];
+      const cards=Array.from(cardNodes);
+      const seenColors=new Set();
+      let hasDuplicate=false;
+      cards.forEach(card=>{
+        const colorSelect=card.querySelector('[data-color]');
+        const color=(colorSelect?.value||'').trim();
+        if(!color) return;
+        if(seenColors.has(color)){
+          hasDuplicate=true;
+        }
+        seenColors.add(color);
+      });
+      if(seenColors.size===0 && cards.length===0 && Array.isArray(this.state.players)){
+        this.state.players.forEach(player=>{
+          if(!player?.color) return;
+          if(seenColors.has(player.color)){
+            hasDuplicate=true;
+          }
+          seenColors.add(player.color);
+        });
+      }
+      if(hasDuplicate){
+        overlay.textContent='⚠️ 棋盤預覽 — 玩家顏色不可重複，請調整後再開始';
+        return;
+      }
+      const uniqueCount=seenColors.size;
+      if(uniqueCount>=2){
+        overlay.textContent=`🗺️ 棋盤預覽 — ${uniqueCount} 位玩家準備就緒，按「開始遊戲」起飛`;
       }else{
         overlay.textContent='🗺️ 棋盤預覽 — 需至少 2 位玩家開始';
       }
@@ -1141,18 +1167,29 @@
     },
     startGame(){
       // players
-      const cards=this.$.playerList.querySelectorAll('[data-player-card]'); const players=[]; const seen=new Set();
+      const cards=this.$.playerList.querySelectorAll('[data-player-card]'); const players=[]; const seen=new Set(); const duplicateColors=new Set();
       cards.forEach((card,idx)=>{
         const name=card.querySelector('[data-name]').value||`玩家${idx+1}`;
-        const color=card.querySelector('[data-color]').value;
+        const color=(card.querySelector('[data-color]')?.value||'').trim();
         const type=card.querySelector('[data-type]').value||'human';
         const controlRaw=card.querySelector('[data-control]')?.value||'auto';
         const control=(controlRaw==='keyboard'||controlRaw==='mouse')?controlRaw:'auto';
-        if(seen.has(color)) return;
-        seen.add(color);
-        players.push({id:`P${idx+1}`,name,color,type,control});
+        if(color && seen.has(color)){
+          duplicateColors.add(color);
+          return;
+        }
+        if(color){
+          seen.add(color);
+          players.push({id:`P${idx+1}`,name,color,type,control});
+        }
       });
-      if(players.length<2){ this.log('至少需要 2 位玩家'); return; }
+      if(duplicateColors.size>0){
+        this.showToast('⚠️ 玩家顏色不可重複，請為每位玩家選擇不同顏色');
+        this.log('玩家顏色不可重複，請調整後再開始');
+        this.updateBoardOverlay();
+        return;
+      }
+      if(players.length<2){ this.showToast('請至少設定 2 位擁有不同顏色的玩家'); this.log('至少需要 2 位玩家'); this.updateBoardOverlay(); return; }
       this.state.players=players; this.normalizePlayerControls(); this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       this.state.consecutiveSixes={};
       this.state.skipTurns={};
