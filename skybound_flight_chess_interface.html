@@ -676,7 +676,13 @@
       const flightRule = rules.dashedFlight||{};
       if(flightsEnabled && flightRule.enabled && current.kind==='track'){
         const to = flightTo(player.color,current.idx);
-        if(to!=null){ current=Pos.track(to); events.push({type:'flight',from:pos.idx,to}); viaFlight=true; recordPosition(current); }
+        if(to!=null){
+          const flightFrom=current.idx;
+          current=Pos.track(to);
+          events.push({type:'flight',from:flightFrom,to});
+          viaFlight=true;
+          recordPosition(current);
+        }
       }
       const specialsConfig = rules.specials||{};
       const specialsActive = specialsConfig.enabled!==false;
