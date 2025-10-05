@@ -496,7 +496,13 @@
               final=special.final; const eventLog=special.events; const effectsLog=special.effects||[];
               const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight});
               const path=(special.path&&special.path.length?special.path:pathRecord);
-              if(!(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i],path});
+              let blockedByAlly=false;
+              if(!rules.stackEnabled && final.kind==='track'){
+                const finalOcc=occ.track[final.idx]||{};
+                const allyCount=finalOcc[player.color]||0;
+                if(allyCount>0) blockedByAlly=true;
+              }
+              if(!blockedByAlly && !(capture?.blocked)) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i],path});
             }
           }
           return;
@@ -535,7 +541,12 @@
           if(current.idx===entryIdx){
             const allowEntry = !rules.homeLaneExactEntry || remaining===0;
             if(allowEntry){
-              current=Pos.home(0); recordPosition(current);
+              current=Pos.home(0);
+              if(remaining>0){
+                remaining-=1;
+                stepsTaken+=1;
+              }
+              recordPosition(current);
               events.push({type:'enter-home'});
             }
           }
@@ -579,6 +590,12 @@
         current=special.final; events=special.events; specialEffects=special.effects||[];
         capture=resolveCaptureOnTrack(player,current,rules,occ,{viaFlight:special.viaFlight});
         if(capture?.blocked) return {legal:false,reason:'land-on-enemy-blockade',events};
+        if(!rules.stackEnabled){
+          const tileOcc=occ.track[current.idx]||{};
+          let allyCount=tileOcc[player.color]||0;
+          if(fromPos.kind==='track' && fromPos.idx===current.idx && allyCount>0) allyCount-=1;
+          if(allyCount>0) return {legal:false,reason:'ally-occupied',events};
+        }
       } else if(current.kind==='home'){
         if(current.idx===BOARD.homeLane.length-1){ current=Pos.finished(); events.push({type:'finish'}); if(recordPath && pathRecord) pathRecord.push(clone(current)); }
       }
