@@ -1638,7 +1638,40 @@
       const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
       const rad=(deg)=>deg*Math.PI/180;
       const trackRadius=r-20;
-      const ringPoint=(i,total=window.GameRules.BOARD.track.length)=>{ const radial=(Math.PI*2)*(i/total)-Math.PI/2; const tangent=radial+Math.PI/2; return{ x:cx+Math.cos(radial)*trackRadius, y:cy+Math.sin(radial)*trackRadius, radial, tangent }; };
+      const stadiumPoint=(t)=>{
+        const W=780,H=560,R=120;
+        const hw=W/2,hh=H/2,irx=hw-R,iry=hh-R;
+        const segs=[
+          {type:'line',len:2*irx,a:{x:-irx,y:-hh},b:{x: irx,y:-hh}},
+          {type:'arc',len:Math.PI/2*R,c:{x: irx,y:-iry},r:R,th0:-Math.PI/2,th1:0},
+          {type:'line',len:2*iry,a:{x: hw,y:-iry},b:{x: hw,y: iry}},
+          {type:'arc',len:Math.PI/2*R,c:{x: irx,y: iry},r:R,th0:0,th1:Math.PI/2},
+          {type:'line',len:2*irx,a:{x: irx,y: hh},b:{x:-irx,y: hh}},
+          {type:'arc',len:Math.PI/2*R,c:{x:-irx,y: iry},r:R,th0:Math.PI/2,th1:Math.PI},
+          {type:'line',len:2*iry,a:{x:-hw,y: iry},b:{x:-hw,y:-iry}},
+          {type:'arc',len:Math.PI/2*R,c:{x:-irx,y:-iry},r:R,th0:Math.PI,th1:3*Math.PI/2},
+        ];
+        const perim=segs.reduce((s,g)=>s+g.len,0);
+        let s=(t-Math.floor(t))*perim;
+        for(const g of segs){
+          if(s<=g.len){
+            if(g.type==='line'){
+              const u=s/g.len,dx=g.b.x-g.a.x,dy=g.b.y-g.a.y;
+              const x=g.a.x+dx*u,y=g.a.y+dy*u;
+              const tangent=Math.atan2(dy,dx);
+              return{ x:cx+x,y:cy+y,tangent };
+            }else{
+              const u=s/g.len,th=g.th0+(g.th1-g.th0)*u;
+              const x=g.c.x+g.r*Math.cos(th),y=g.c.y+g.r*Math.sin(th);
+              const tangent=th+Math.PI/2;
+              return{ x:cx+x,y:cy+y,tangent };
+            }
+          }
+          s-=g.len;
+        }
+        return{ x:cx,y:cy-hh,tangent:Math.PI/2 };
+      };
+      const normalFromAngle=(a)=>({nx:-Math.sin(a),ny:Math.cos(a)});
       const arcPath=(centerX,centerY,rInner,rOuter,startDeg,endDeg)=>{
         const startRad=rad(startDeg);
         const endRad=rad(endDeg);
@@ -1711,6 +1744,8 @@
       ];
       quadrants.forEach(q=>drawQuadrant(q.start,q.end,q.color,q.label));
       const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJump=window.GameRules.BOARD.special.ownColorJump.indices;
+      const points=new Array(total);
+      for(let i=0;i<total;i++) points[i]=stadiumPoint(i/total);
       const specials=window.GameRules.BOARD.special||{};
       const safeExtras=new Set((specials.safeTiles?.extra)||[]);
       const specialByIdx=window.GameRules.SPECIAL_BY_IDX||{};
@@ -1740,8 +1775,8 @@
       const cardinalTargets=[0,90,180,270];
       const cardinalBest=cardinalTargets.map(()=>({idx:-1,delta:Infinity}));
       for(let i=0;i<total;i++){
-        const {x,y,radial,tangent}=ringPoint(i,total);
-        geom.track[i]={x,y,angle:tangent,radial};
+        const {x,y,tangent}=points[i];
+        geom.track[i]={x,y,angle:tangent};
         const tangentDeg=tangent*180/Math.PI;
         const gTile=el('g',{transform:`translate(${x} ${y})`});
         const borderGroup=el('g',{transform:`rotate(${tangentDeg})`});
@@ -1793,9 +1828,11 @@
         });
         const hudStatic=this._hudLayers?.static;
         if(hudStatic && i%5===0){
-          const tickRadius=trackRadius+16;
-          const tx=cx+Math.cos(radial)*tickRadius;
-          const ty=cy+Math.sin(radial)*tickRadius;
+          const {nx,ny}=normalFromAngle(tangent);
+          const outward={x:-nx,y:-ny};
+          const tickDist=tileSize*0.9;
+          const tx=x+outward.x*tickDist;
+          const ty=y+outward.y*tickDist;
           hudStatic.appendChild(el('text',{x:tx,y:ty,'text-anchor':'middle','dominant-baseline':'central','font-size':10,'fill':'rgba(255,255,255,.7)'},[document.createTextNode(String(i))]));
         }
       }
@@ -1822,15 +1859,31 @@
         });
         gSpecials.appendChild(portalLines);
       }
+      const innerLen=340;
+      const laneFor=(idx)=>{
+        if(typeof idx!=='number') return null;
+        const t=(idx%total)/total;
+        const p=points[idx%total]||stadiumPoint(t);
+        const {nx,ny}=normalFromAngle(p.tangent);
+        return{
+          start:{x:p.x+nx*8,y:p.y+ny*8},
+          end:{x:p.x+nx*(innerLen+8),y:p.y+ny*(innerLen+8)},
+          angle:Math.atan2(ny,nx)
+        };
+      };
+      const lanes={
+        red:laneFor(entryIdx.red),
+        blue:laneFor(entryIdx.blue),
+        yellow:laneFor(entryIdx.yellow),
+        green:laneFor(entryIdx.green)
+      };
       for(const [idx,col] of Object.entries(entryIndexByColor)){
         const tile=geom.track[idx];
         if(!tile) continue;
-        const dir={x:cx-tile.x,y:cy-tile.y};
-        const len=Math.hypot(dir.x,dir.y)||1; const ux=dir.x/len,uy=dir.y/len;
-        const outward={x:-ux,y:-uy};
-        const tip={x:tile.x+ux*(tileSize*0.28),y:tile.y+uy*(tileSize*0.28)};
-        const baseCenter={x:tile.x+outward.x*(tileSize*0.34),y:tile.y+outward.y*(tileSize*0.34)};
-        const perp={x:-uy,y:ux}; const baseHalf=tileSize*0.24;
+        const {nx,ny}=normalFromAngle(tile.angle||0);
+        const tip={x:tile.x+nx*(tileSize*0.28),y:tile.y+ny*(tileSize*0.28)};
+        const baseCenter={x:tile.x-nx*(tileSize*0.34),y:tile.y-ny*(tileSize*0.34)};
+        const perp={x:-ny,y:nx}; const baseHalf=tileSize*0.24;
         const p1={x:baseCenter.x+perp.x*baseHalf,y:baseCenter.y+perp.y*baseHalf};
         const p2={x:baseCenter.x-perp.x*baseHalf,y:baseCenter.y-perp.y*baseHalf};
         gSpecials.appendChild(el('polygon',{points:`${tip.x},${tip.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`,fill:withAlpha(color(`--${col}`),0.82)}));
@@ -1860,15 +1913,17 @@
         }
       }
       gSpecials.appendChild(flightGroup);
-      const homeLen=window.GameRules.BOARD.homeLane.length; Object.entries(entryIdx).forEach(([col,idx])=>{
-        const entry=geom.track[idx]; if(!entry) return;
-        const dir={x:cx-entry.x,y:cy-entry.y}; const len=Math.hypot(dir.x,dir.y)||1; const ux=dir.x/len,uy=dir.y/len;
+      const homeLen=window.GameRules.BOARD.homeLane.length; Object.entries(lanes).forEach(([col,lane])=>{
+        if(!lane) return;
+        const dir={x:lane.end.x-lane.start.x,y:lane.end.y-lane.start.y};
+        const len=Math.hypot(dir.x,dir.y)||1;
+        const ux=dir.x/len,uy=dir.y/len;
         const spacing=tileSize+10; const offset=tileSize*0.6;
         const perp={x:-uy,y:ux};
         geom.home[col]=[];
         for(let i=0;i<homeLen;i++){
           const dist=offset+i*spacing;
-          const x=entry.x+ux*dist; const y=entry.y+uy*dist;
+          const x=lane.start.x+ux*dist; const y=lane.start.y+uy*dist;
           geom.home[col][i]={x,y};
           const along=tileSize*0.5;
           const halfWidth=tileSize*0.18;
