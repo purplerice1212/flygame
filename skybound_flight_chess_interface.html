@@ -784,7 +784,15 @@
           if(custom) custom.checked=true;
         }
       });
-      this.$.btnQuick.addEventListener('click',()=>{ this.applyPreset('classic'); this.startGame(); });
+      this.$.btnQuick.addEventListener('click',()=>{
+        const radios=this.$.formSetup?.querySelectorAll('input[name="preset"]');
+        const classic=this.$.formSetup?.querySelector('input[name="preset"][value="classic"]');
+        if(radios && classic){
+          radios.forEach(radio=>{ radio.checked = (radio===classic); });
+        }
+        this.applyPreset('classic');
+        this.startGame();
+      });
       this.$.btnContinue.addEventListener('click',()=>this.continueFromSave());
       this.$.btnLobby.addEventListener('click',()=>this.toLobby());
       if(this.$.btnReplayLast){
