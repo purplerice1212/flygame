@@ -266,6 +266,10 @@
           <button class="btn" id="btn-roll" type="button" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
           <output id="dice-output" aria-live="polite" class="pill" role="status">–</output>
         </div>
+        <div style="margin-top:12px">
+          <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
+          <div id="movables" class="list" aria-live="polite"></div>
+        </div>
         <div id="toast-host" aria-live="polite"></div>
         <div id="hint-card" aria-live="polite"></div>
         <section id="last-move-card" aria-live="polite" data-empty="true">
@@ -275,10 +279,6 @@
           <ul id="last-move-captured"></ul>
           <button class="btn" type="button" id="btn-replay-last" disabled aria-disabled="true">重播上一步</button>
         </section>
-        <div style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
-          <div id="movables" class="list" aria-live="polite"></div>
-        </div>
         <div style="margin-top:12px">
           <h3 class="section-title" style="font-size:1rem">戰報</h3>
           <div id="log" class="log" role="log" aria-live="polite"></div>
