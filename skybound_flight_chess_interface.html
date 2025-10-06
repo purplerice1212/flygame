@@ -1068,6 +1068,7 @@
       if(source==='system') return true;
       if(this.isInputLocked()){ return false; }
       const current=this.currentPlayer();
+      if(current && this.isAI(current)) return false;
       if(current && this.state.disabledColors && this.state.disabledColors[current.id]) return false;
       const globalMode=this.state.settings?.keyboardMode||'shared';
       if(globalMode==='shared') return true;
@@ -1079,6 +1080,7 @@
     handleBlockedInteraction(source){
       const player=this.currentPlayer();
       if(this.isInputLocked()){ this.showToast('請稍候，提示顯示中…',900); return; }
+      if(player && this.isAI(player)){ this.showToast('AI 執行中',1200); return; }
       if(!player) return;
       const control=this.currentControlModeForTurn();
       if(control==='keyboard' && source==='mouse') this.showToast(`${player.name} 回合需用鍵盤操作`,1400);
@@ -2415,6 +2417,7 @@
       if(!move) return;
       if(!this.isInteractionPermitted(source)){ this.handleBlockedInteraction(source); return; }
       const wasBonusMove=this.state.bonusSelecting===true;
+      const carriedExtraTurn=this.state.pendingExtraTurn===true;
       this.pushHistory();
       const pid=this.state.turn;
       const player=this.currentPlayer();
@@ -2584,7 +2587,12 @@
         };
         this.renderLastMove();
 
+        const rolledValue=move.dice;
+        const playerFinished=this.state.finishOrder?.includes(pid) || !!this.state.disabledColors?.[pid];
+        const extraTurnEarned=!playerFinished && (((rolledValue===6)&&this.state.rules?.extraTurnOnSix) || extraTurnFromEvent);
+
         if(pendingBonusRequest){
+          this.state.pendingExtraTurn=carriedExtraTurn || extraTurnEarned;
           this.state.pendingBonus=pendingBonusRequest;
           this.state.bonusSelecting=true;
           this.state.dice=pendingBonusRequest.dice;
@@ -2620,12 +2628,10 @@
         this.$.diceOut.textContent='–';
         this.state.legalMoves=[];
         this.previewLastMove();
-
-        const rolledValue=move.dice;
-        const playerFinished=this.state.finishOrder?.includes(pid) || !!this.state.disabledColors?.[pid];
-        const again=(!wasBonusMove && !playerFinished && (((rolledValue===6)&&this.state.rules?.extraTurnOnSix) || extraTurnFromEvent));
+        const shouldGrantExtraTurn=wasBonusMove ? (carriedExtraTurn || extraTurnEarned) : extraTurnEarned;
+        this.state.pendingExtraTurn=false;
         this.renderHints();
-        if(!again){
+        if(!shouldGrantExtraTurn){
           this.advanceTurn();
         }else{
           this.state.legalMoves=[];
@@ -2929,9 +2935,13 @@
     },
 
     // --------- AI ---------
-    isAI(player){ return (player.type||'human')==='ai'; },
+    isAI(player){
+      if(!player || typeof player!=='object') return false;
+      return (player.type||'human')==='ai';
+    },
     chooseAIMove(){
       const player=this.currentPlayer();
+      if(!player) return null;
       const moves=this.state.legalMoves||[];
       if(moves.length===0) return null;
       const rules=this.state.rules||window.GameRules.DEFAULT_RULES;
@@ -3007,20 +3017,29 @@
     maybeAutoPlayIfAI(){
       if(this.state.view!=='game') return;
       const player=this.currentPlayer();
+      if(!player) return;
       if(!this.isAI(player)) return;
       setTimeout(()=>{
-        if(this.state.animating) return this.maybeAutoPlayIfAI();
+        if(this.state.view!=='game') return;
+        if(this.state.animating){
+          this.maybeAutoPlayIfAI();
+          return;
+        }
         const current=this.currentPlayer();
-        if(!this.isAI(current)) return;
+        if(!current || !this.isAI(current)) return;
+        if(this.state.view!=='game') return;
         if(current.id!==player.id){
           this.maybeAutoPlayIfAI();
           return;
         }
+        if(this.state.view!=='game') return;
         if(this.state.dice==null){
           this.rollDice('system');
           return;
         }
+        if(this.state.view!=='game') return;
         const mv=this.chooseAIMove();
+        if(this.state.view!=='game') return;
         if(mv){
           this.applyMove(mv,'system');
         }else{
