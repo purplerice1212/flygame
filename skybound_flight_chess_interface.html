@@ -1801,22 +1801,22 @@
       const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
       const rad=(deg)=>deg*Math.PI/180;
       const trackRadius=r-20;
+      const STADIUM_W=780,STADIUM_H=560,STADIUM_R=120;
+      const hw=STADIUM_W/2,hh=STADIUM_H/2,irx=hw-STADIUM_R,iry=hh-STADIUM_R;
+      const trackSegments=[
+        {type:'line',len:2*irx,a:{x:-irx,y:-hh},b:{x: irx,y:-hh}},
+        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y:-iry},r:STADIUM_R,th0:-Math.PI/2,th1:0},
+        {type:'line',len:2*iry,a:{x: hw,y:-iry},b:{x: hw,y: iry}},
+        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y: iry},r:STADIUM_R,th0:0,th1:Math.PI/2},
+        {type:'line',len:2*irx,a:{x: irx,y: hh},b:{x:-irx,y: hh}},
+        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x:-irx,y: iry},r:STADIUM_R,th0:Math.PI/2,th1:Math.PI},
+        {type:'line',len:2*iry,a:{x:-hw,y: iry},b:{x:-hw,y:-iry}},
+        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x:-irx,y:-iry},r:STADIUM_R,th0:Math.PI,th1:3*Math.PI/2},
+      ];
+      const trackPerimeter=trackSegments.reduce((sum,segment)=>sum+segment.len,0);
       const stadiumPoint=(t)=>{
-        const W=780,H=560,R=120;
-        const hw=W/2,hh=H/2,irx=hw-R,iry=hh-R;
-        const segs=[
-          {type:'line',len:2*irx,a:{x:-irx,y:-hh},b:{x: irx,y:-hh}},
-          {type:'arc',len:Math.PI/2*R,c:{x: irx,y:-iry},r:R,th0:-Math.PI/2,th1:0},
-          {type:'line',len:2*iry,a:{x: hw,y:-iry},b:{x: hw,y: iry}},
-          {type:'arc',len:Math.PI/2*R,c:{x: irx,y: iry},r:R,th0:0,th1:Math.PI/2},
-          {type:'line',len:2*irx,a:{x: irx,y: hh},b:{x:-irx,y: hh}},
-          {type:'arc',len:Math.PI/2*R,c:{x:-irx,y: iry},r:R,th0:Math.PI/2,th1:Math.PI},
-          {type:'line',len:2*iry,a:{x:-hw,y: iry},b:{x:-hw,y:-iry}},
-          {type:'arc',len:Math.PI/2*R,c:{x:-irx,y:-iry},r:R,th0:Math.PI,th1:3*Math.PI/2},
-        ];
-        const perim=segs.reduce((s,g)=>s+g.len,0);
-        let s=(t-Math.floor(t))*perim;
-        for(const g of segs){
+        let s=(t-Math.floor(t))*trackPerimeter;
+        for(const g of trackSegments){
           if(s<=g.len){
             if(g.type==='line'){
               const u=s/g.len,dx=g.b.x-g.a.x,dy=g.b.y-g.a.y;
@@ -1910,8 +1910,10 @@
       ];
       quadrants.forEach(q=>drawQuadrant(q.start,q.end,q.color,q.label));
       const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJump=window.GameRules.BOARD.special.ownColorJump.indices;
+      const trackOffsetNormalized=(trackSegments[0].len/2)/trackPerimeter;
+      const trackOffsetTiles=trackOffsetNormalized*total;
       const points=new Array(total);
-      for(let i=0;i<total;i++) points[i]=stadiumPoint(i/total);
+      for(let i=0;i<total;i++) points[i]=stadiumPoint((i+trackOffsetTiles)/total);
       const specials=window.GameRules.BOARD.special||{};
       const safeExtras=new Set((specials.safeTiles?.extra)||[]);
       const specialByIdx=window.GameRules.SPECIAL_BY_IDX||{};
