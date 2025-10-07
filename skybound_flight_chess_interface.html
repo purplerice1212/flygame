@@ -358,6 +358,13 @@
             <option value="ai">AI</option>
           </select>
         </label>
+        <label data-difficulty-row hidden>AI 難度
+          <select data-difficulty>
+            <option value="easy">簡單</option>
+            <option value="normal" selected>普通</option>
+            <option value="hard">困難</option>
+          </select>
+        </label>
         <label>控制
           <select data-control>
             <option value="auto" selected>自動（依模式）</option>
@@ -920,6 +927,10 @@
             const card=target.closest('[data-player-card]');
             this.syncPlayerCardColor(card);
           }
+          if(target.matches('[data-type]')){
+            const card=target.closest('[data-player-card]');
+            this.syncPlayerCardType(card);
+          }
           this.updateBoardOverlay();
         });
       }
@@ -1006,10 +1017,25 @@
         }
       }
     },
+    syncPlayerCardType(card){
+      if(!card) return;
+      const typeSelect=card.querySelector('[data-type]');
+      const difficultyRow=card.querySelector('[data-difficulty-row]');
+      const difficultySelect=card.querySelector('[data-difficulty]');
+      if(!typeSelect || !difficultyRow) return;
+      const type=(typeSelect.value||'human').toLowerCase();
+      const isAI=type==='ai';
+      difficultyRow.hidden=!isAI;
+      difficultyRow.setAttribute('aria-hidden',isAI?'false':'true');
+      if(isAI && difficultySelect){
+        const normalized=this.normalizeDifficulty(difficultySelect.value||'normal');
+        difficultySelect.value=normalized;
+      }
+    },
     refreshPlayerCardColors(){
       const cards=this.$?.playerList?.querySelectorAll('[data-player-card]');
       if(!cards) return;
-      cards.forEach(card=>this.syncPlayerCardColor(card));
+      cards.forEach(card=>{ this.syncPlayerCardColor(card); this.syncPlayerCardType(card); });
     },
     updateSpecialsLegend(){
       const legend=this.$?.specialsLegend; if(!legend) return;
@@ -1101,8 +1127,9 @@
       if(player && this.isAI(player)){ this.showToast('AI 執行中',1200); return; }
       if(!player) return;
       const control=this.currentControlModeForTurn();
-      if(control==='keyboard' && source==='mouse') this.showToast(`${player.name} 回合需用鍵盤操作`,1400);
-      else if(control==='mouse' && source==='keyboard') this.showToast(`${player.name} 回合請用滑鼠`,1400);
+      const label=this.formatPlayerName(player,{includeDifficulty:true});
+      if(control==='keyboard' && source==='mouse') this.showToast(`${label} 回合需用鍵盤操作`,1400);
+      else if(control==='mouse' && source==='keyboard') this.showToast(`${label} 回合請用滑鼠`,1400);
     },
     renderHints(){
       const host=this.$?.hintCard; if(!host) return;
@@ -1116,7 +1143,7 @@
       const stage=this.state.bonusSelecting?'bonus':(this.state.dice==null?'roll':'move');
       const list=document.createElement('ul');
       const title=document.createElement('h3');
-      title.textContent=`${player.name} 的操作提示`;
+      title.textContent=`${this.formatPlayerName(player,{includeDifficulty:true})} 的操作提示`;
       const hints=[];
       const moveCount=Array.isArray(this.state.legalMoves)?this.state.legalMoves.length:0;
       const mode=this.state.settings.keyboardMode||'shared';
@@ -1200,13 +1227,15 @@
       }
       const colorNameMap={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
       const player=summary.player||{};
+      const actualPlayer=this.state.players.find(p=>p.id===player.id)||player;
       const diceText=typeof summary.dice==='number'?`擲出 ${summary.dice}`:'';
       const desc=summary.description||'完成移動';
-      const colorLabel=colorNameMap[player.color]||player.color||'';
+      const colorValue=player.color||actualPlayer.color;
+      const colorLabel=colorNameMap[colorValue]||colorValue||'';
       if(summaryEl){
         const colorDisplay=colorLabel?`（${colorLabel}）`:'';
         const diceDisplay=diceText?` ${diceText}`:'';
-        summaryEl.textContent=`${player.name||'玩家'}${colorDisplay}${diceDisplay}：${desc}`;
+        summaryEl.textContent=`${this.formatPlayerName(actualPlayer,{includeDifficulty:true})}${colorDisplay}${diceDisplay}：${desc}`;
         summaryEl.classList.remove('muted');
       }
       const metaBits=[];
@@ -1269,7 +1298,8 @@
       }else{
         status=`完成 ${finishedCount}/${totalPieces}`;
       }
-      return `${player.name} 的回合 — ${action}（${status}）`;
+      const label=this.formatPlayerName(player,{includeDifficulty:true});
+      return `${label} 的回合 — ${action}（${status}）`;
     },
     showTurnPrompt(message,{duration=2200,force=false,lock=0}={}){
       const host=this.$?.turnBanner; if(!host) return;
@@ -1334,7 +1364,7 @@
     handleTurnTimerExpired(){
       const player=this.currentPlayer();
       if(!player) return;
-      this.log(`${player.name} 超時！`);
+      this.log(`${this.formatPlayerName(player,{includeDifficulty:true})} 超時！`);
       if(this.state.dice==null){
         this.rollDice('system');
       }else{
@@ -1362,7 +1392,7 @@
     },
     handleNoMoves(player){
       this.clearTurnTimer();
-      const name=player?.name||'該玩家';
+      const name=this.formatPlayerName(player,{includeDifficulty:true});
       this.showTurnPrompt(`${name} 無步可走`,{duration:1600,force:true,lock:400});
       this.renderHints();
       if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); }
@@ -1373,7 +1403,7 @@
     },
     updateTurnUI(){
       const player=this.currentPlayer();
-      this.$.turn.textContent=player?`當前：${player.name}`:'當前：—';
+      this.$.turn.textContent=player?`當前：${this.formatPlayerName(player,{includeDifficulty:true})}`:'當前：—';
       this.setButtonDisabled(this.$.btnRoll,this.state.animating||this.state.dice!=null);
       const canUndo=!!(this.state.rules?.undoEnabled && Array.isArray(this.state.history) && this.state.history.length>0);
       this.setButtonDisabled(this.$.btnUndo,!canUndo);
@@ -1405,9 +1435,12 @@
         if(colorSelect) colorSelect.value=colorValue;
         const typeSelect=fragment.querySelector('[data-type]');
         if(typeSelect) typeSelect.value = (i<2?'human':'ai');
+        const difficultySelect=fragment.querySelector('[data-difficulty]');
+        if(difficultySelect) difficultySelect.value='normal';
         if(card) card.dataset.color=colorValue;
         const controlSelect=fragment.querySelector('[data-control]');
         if(controlSelect){ controlSelect.value='auto'; }
+        if(card) this.syncPlayerCardType(card);
         host.appendChild(fragment);
       }
       this.refreshPlayerCardColors();
@@ -1538,7 +1571,9 @@
       this.state.players=this.state.players.map(player=>{
         if(!player || typeof player!=='object') return player;
         const control=(player.control==='keyboard'||player.control==='mouse')?player.control:'auto';
-        return Object.assign({},player,{control});
+        const isAIPlayer=this.isAI(player);
+        const difficulty=isAIPlayer?this.normalizeDifficulty(player.difficulty||'normal'):null;
+        return Object.assign({},player,{control,difficulty:isAIPlayer?difficulty:null});
       });
     },
     startGame(){
@@ -1550,13 +1585,16 @@
         const type=card.querySelector('[data-type]').value||'human';
         const controlRaw=card.querySelector('[data-control]')?.value||'auto';
         const control=(controlRaw==='keyboard'||controlRaw==='mouse')?controlRaw:'auto';
+        const difficultySelect=card.querySelector('[data-difficulty]');
+        const difficultyRaw=difficultySelect?difficultySelect.value:'normal';
+        const difficulty=(type==='ai')?this.normalizeDifficulty(difficultyRaw):null;
         if(color && seen.has(color)){
           duplicateColors.add(color);
           return;
         }
         if(color){
           seen.add(color);
-          players.push({id:`P${idx+1}`,name,color,type,control});
+          players.push({id:`P${idx+1}`,name,color,type,control,difficulty});
         }
       });
       if(duplicateColors.size>0){
@@ -1592,6 +1630,9 @@
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
+      this.state.players.filter(p=>this.isAI(p)).forEach(p=>{
+        this.log(`${this.formatPlayerName(p,{includeDifficulty:true})} 將以此難度應戰`);
+      });
       this.renderLastMove();
       this.clearGhostPath();
       this.clearTurnTimer();
@@ -1629,8 +1670,14 @@
           if(colorSelect && player.color){ colorSelect.value=player.color; }
           const typeSelect=card.querySelector('[data-type]');
           if(typeSelect && player.type){ typeSelect.value=player.type; }
+          const difficultySelect=card.querySelector('[data-difficulty]');
+          if(difficultySelect){
+            const diff=this.normalizeDifficulty(player.difficulty||'normal');
+            difficultySelect.value=diff;
+          }
           const controlSelect=card.querySelector('[data-control]');
           if(controlSelect && player.control){ controlSelect.value=player.control; }
+          this.syncPlayerCardType(card);
         });
         this.refreshPlayerCardColors();
       }
@@ -1668,6 +1715,9 @@
       this.$.movables.innerHTML='';
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
+      this.state.players.filter(p=>this.isAI(p)).forEach(p=>{
+        this.log(`${this.formatPlayerName(p,{includeDifficulty:true})} 將以此難度應戰`);
+      });
       this.renderLastMove();
       this.clearGhostPath();
       this.clearTurnTimer();
@@ -1694,11 +1744,12 @@
       if(this.state.dice!=null){ this.log('本回合已擲骰'); return; }
       const player=this.currentPlayer();
       if(!player){ return; }
+      const label=this.formatPlayerName(player,{includeDifficulty:true});
       const skipRemaining=Math.max(0,this.state.skipTurns?.[player.id]||0);
       if(skipRemaining>0){
         this.state.skipTurns[player.id]=skipRemaining-1;
-        this.log(`${player.name} 因亂流停飛，跳過此回合擲骰`);
-        this.showToast(`${player.name} 暫停一回合`,1200);
+        this.log(`${label} 因亂流停飛，跳過此回合擲骰`);
+        this.showToast(`${label} 暫停一回合`,1200);
         this.state.legalMoves=[];
         this.highlightMovables();
         this.renderHints();
@@ -1709,14 +1760,14 @@
       const value=1+Math.floor(Math.random()*6);
       this.state.dice=value;
       this.$.diceOut.textContent=String(value);
-      this.log(`${player.name} 擲出 ${value}`);
+      this.log(`${label} 擲出 ${value}`);
       const pid=player.id;
       const prev=this.state.consecutiveSixes?.[pid]||0;
       if(!this.state.consecutiveSixes) this.state.consecutiveSixes={};
       if(value===6){ this.state.consecutiveSixes[pid]=prev+1; }
       else { this.state.consecutiveSixes[pid]=0; }
       if(value===6 && this.state.rules?.tripleSixPenalty && this.state.consecutiveSixes[pid]>=3){
-        this.log(`${player.name} 連續三次擲出 6，被判失去回合`);
+        this.log(`${label} 連續三次擲出 6，被判失去回合`);
         this.state.consecutiveSixes[pid]=0;
         this.state.dice=null;
         this.$.diceOut.textContent='–';
@@ -1733,7 +1784,7 @@
       this.saveGame();
       const moveCount=(this.state.legalMoves||[]).length;
       if(moveCount===0){
-        this.log(`${player.name} 無步可走`);
+        this.log(`${label} 無步可走`);
         this.handleNoMoves(player);
         return;
       }
@@ -2608,11 +2659,11 @@
             if(this.state.finishedSlots?.[info.opp.id]) delete this.state.finishedSlots[info.opp.id][info.pieceIndex];
             delete capturedPiece.finishedSlot;
           }
-          this.log(`${player.name} 吃子！把對手送回基地`);
+          this.log(`${playerLabel} 吃子！把對手送回基地`);
         }
 
         if(movingPieces.length>1){
-          this.log(`${player.name} 疊子合體移動（${movingPieces.length} 枚）`);
+          this.log(`${playerLabel} 疊子合體移動（${movingPieces.length} 枚）`);
         }
 
         const effectsOutcome=this.applySpecialEffects({player,move,leadIndex:leadEntry.idx});
@@ -2743,29 +2794,30 @@
     applySpecialEffects({player,move,leadIndex}){
       const outcome={extraTurn:false,pendingBonus:null};
       const events=Array.isArray(move?.events)?move.events:[];
+      const playerLabel=this.formatPlayerName(player,{includeDifficulty:true});
       events.forEach(ev=>{
-        if(ev.type==='enter-home') this.log(`${player.name} 進入家路`);
-        else if(ev.type==='jump') this.log(`${player.name} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
-        else if(ev.type==='flight') this.log(`${player.name} 走飛線`);
-        else if(ev.type==='finish') this.log(`${player.name} 抵達終點！`);
+        if(ev.type==='enter-home') this.log(`${playerLabel} 進入家路`);
+        else if(ev.type==='jump') this.log(`${playerLabel} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
+        else if(ev.type==='flight') this.log(`${playerLabel} 走飛線`);
+        else if(ev.type==='finish') this.log(`${playerLabel} 抵達終點！`);
         else if(ev.type==='portal'){
           const label=ev.label?` ${ev.label}`:'';
-          this.log(`${player.name} 穿越傳送門${label}`);
+          this.log(`${playerLabel} 穿越傳送門${label}`);
           this.showToast(`🌀 傳送門${label||''}！`,1200);
         }
         else if(ev.type==='power-up'){
           if(ev.effect==='extra-roll'){
-            this.log(`${player.name} 拿到增擲機會！`);
+            this.log(`${playerLabel} 拿到增擲機會！`);
             this.showToast('🎲 加擲機會！',1400);
           }else if(ev.effect==='advance-2'){
-            this.log(`${player.name} 動力提升，準備再飛 2 格`);
+            this.log(`${playerLabel} 動力提升，準備再飛 2 格`);
           }else if(ev.effect==='command-other'){
-            this.log(`${player.name} 獲得指揮權，可讓另一架棋子前進 1 格`);
+            this.log(`${playerLabel} 獲得指揮權，可讓另一架棋子前進 1 格`);
           }
         }
         else if(ev.type==='trap'){
           if(ev.effect==='skip-turn'){
-            this.log(`${player.name} 遭遇亂流，下一回合將停飛`);
+            this.log(`${playerLabel} 遭遇亂流，下一回合將停飛`);
             this.showToast('⚠️ 亂流！下回合停飛',1600);
           }
         }
@@ -3044,8 +3096,27 @@
       if(!player || typeof player!=='object') return false;
       return (player.type||'human')==='ai';
     },
-    chooseAIMove(){
-      const player=this.currentPlayer();
+    normalizeDifficulty(value){
+      const raw=(value==null?'':String(value)).toLowerCase();
+      if(raw==='easy'||raw==='normal'||raw==='hard') return raw;
+      return 'normal';
+    },
+    difficultyLabel(value){
+      const labels={easy:'簡單',normal:'普通',hard:'困難'};
+      const key=this.normalizeDifficulty(value);
+      return labels[key]||labels.normal;
+    },
+    formatPlayerName(player,{includeDifficulty=false}={}){
+      if(!player) return '該玩家';
+      let label=player.name||player.id||'該玩家';
+      if(includeDifficulty && this.isAI(player)){
+        label+=`（AI·${this.difficultyLabel(player.difficulty)}）`;
+      }
+      return label;
+    },
+    chooseAIMove(context={}){
+      const player=context?.player||this.currentPlayer();
+      const difficulty=this.normalizeDifficulty(context?.difficulty||player?.difficulty||'normal');
       if(!player) return null;
       const moves=this.state.legalMoves||[];
       if(moves.length===0) return null;
@@ -3110,14 +3181,45 @@
         const specials=[...(m.events||[]),...(m.effects||[])];
         if(specials.some(e=>e?.type==='trap')) score-=500;
         if(specials.some(e=>e?.type==='power-up')) score+=150;
+        const beforeRisk=(beforePos.kind==='track')?captureRiskProb(player.color,beforePos.idx):0;
+        const afterRisk=(m.to.kind==='track')?captureRiskProb(player.color,m.to.idx):0;
         if(m.to.kind==='track'){
-          const prob=captureRiskProb(player.color,m.to.idx);
-          score-=prob*700;
+          score-=afterRisk*700;
         }
-        return {move:m,score,before,after};
+        return {move:m,score,before,after,progress,beforeRisk,afterRisk};
       });
-      scored.sort((a,b)=> b.score!==a.score? b.score-a.score : ((a.before-a.after)!==(b.before-b.after)? (b.before-b.after)-(a.before-a.after) : (((b.move.capture?.captured||[]).length)-((a.move.capture?.captured||[]).length))));
-      return scored[0].move;
+      if(difficulty==='hard'){
+        scored.forEach(entry=>{
+          const safetyGain=(entry.beforeRisk-entry.afterRisk);
+          entry.score+=safetyGain*400;
+          entry.score-=entry.afterRisk*200;
+          if(entry.move.to.kind==='finished') entry.score+=400;
+          if(entry.after<=2 && entry.after<entry.before) entry.score+=160;
+          if((entry.move.events||[]).some(e=>e.type==='enter-home')) entry.score+=120;
+          if(entry.move.capture?.captured?.length>0) entry.score+=180;
+        });
+      }
+      const sorted=scored.slice().sort((a,b)=>{
+        if(b.score!==a.score) return b.score-a.score;
+        const progDiff=(b.progress||0)-(a.progress||0);
+        if(progDiff!==0) return progDiff;
+        const capturesA=(a.move.capture?.captured||[]).length;
+        const capturesB=(b.move.capture?.captured||[]).length;
+        if(capturesB!==capturesA) return capturesB-capturesA;
+        return (a.before-a.after)-(b.before-b.after);
+      });
+      if(sorted.length===0) return null;
+      if(difficulty==='easy' && sorted.length>1){
+        const weights=sorted.map((_,idx)=>idx+1);
+        const total=weights.reduce((sum,val)=>sum+val,0);
+        let threshold=Math.random()*total;
+        for(let i=sorted.length-1;i>=0;i--){
+          threshold-=weights[i];
+          if(threshold<=0) return sorted[i].move;
+        }
+        return sorted[sorted.length-1].move;
+      }
+      return sorted[0].move;
     },
     maybeAutoPlayIfAI(){
       if(this.state.view!=='game') return;
@@ -3143,12 +3245,15 @@
           return;
         }
         if(this.state.view!=='game') return;
-        const mv=this.chooseAIMove();
+        const diff=this.normalizeDifficulty(current.difficulty||'normal');
+        const mv=this.chooseAIMove({player:current,difficulty:diff});
         if(this.state.view!=='game') return;
+        const label=this.formatPlayerName(current,{includeDifficulty:true});
         if(mv){
+          this.log(`${label} 選擇：${this.describeMove(mv)}`);
           this.applyMove(mv,'system');
         }else{
-          this.log(`${current.name} 無步可走`);
+          this.log(`${label} 無步可走`);
           this.handleNoMoves(current);
         }
       },300);
