@@ -72,6 +72,15 @@
     legend{padding:0 8px}
     label{display:flex;align-items:center;gap:8px}
     .row{display:flex;gap:8px;flex-wrap:wrap}
+    #preset-options{align-items:stretch}
+    .preset-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:180px;padding:12px;border-radius:12px;border:1px solid #1f2937;background:rgba(15,23,42,0.6);cursor:pointer;transition:border-color .18s ease,background .18s ease}
+    .preset-card:hover{border-color:rgba(34,211,238,0.45)}
+    .preset-card input{margin:0 0 6px}
+    .preset-title{font-weight:600}
+    .preset-note{color:var(--muted);font-size:.85rem}
+    body[data-theme="light"] .preset-card{background:rgba(226,232,240,0.65);border-color:#cbd5f5}
+    body[data-theme="light"] .preset-card:hover{border-color:#38bdf8}
+    body[data-theme="high"] .preset-card{background:rgba(15,23,42,0.8);border-color:#38bdf8}
     input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
     body[data-theme="light"] input[type="text"], body[data-theme="light"] select{background:#e2e8f0;color:#0f172a;border-color:#cbd5f5}
     body[data-theme="high"] input[type="text"], body[data-theme="high"] select{background:#0f172a;color:#f8fafc;border-color:#38bdf8}
@@ -162,19 +171,31 @@
 
           <fieldset>
             <legend>規則預設</legend>
-            <div class="row">
-              <label><input type="radio" name="preset" value="classic" checked> 經典</label>
-              <label><input type="radio" name="preset" value="fast"> 速戰</label>
-              <label><input type="radio" name="preset" value="custom"> 自訂</label>
+            <div class="row" id="preset-options">
+              <label class="preset-card">
+                <input type="radio" name="preset" value="custom" checked>
+                <span class="preset-title">自訂</span>
+                <span class="preset-note">預設：擲偶數起飛</span>
+              </label>
+              <label class="preset-card">
+                <input type="radio" name="preset" value="classic">
+                <span class="preset-title">經典</span>
+                <span class="preset-note">起飛需擲 6</span>
+              </label>
+              <label class="preset-card">
+                <input type="radio" name="preset" value="fast">
+                <span class="preset-title">速戰</span>
+                <span class="preset-note">起飛擲 5 或 6</span>
+              </label>
             </div>
-            <details id="rules-advanced">
+            <details id="rules-advanced" open>
               <summary>自訂規則（展開）</summary>
               <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:8px">
                 <fieldset>
                   <legend>起飛</legend>
+                  <label><input type="radio" name="takeoff" value="even" checked> 擲偶數</label>
                   <label><input type="radio" name="takeoff" value="six"> 擲 6 才起飛</label>
                   <label><input type="radio" name="takeoff" value="fiveOrSix"> 擲 5 或 6</label>
-                  <label><input type="radio" name="takeoff" value="even" checked> 擲偶數</label>
                 </fieldset>
                 <fieldset>
                   <legend>連擲 / 懲罰</legend>
@@ -808,7 +829,7 @@
       this.applyTheme();
       this.renderLastMove();
       this._hudLayers={static:null,dynamic:null};
-      this.applyPreset('classic');
+      this.setDefaultRules();
       this.renderLobbyPlayers(2);
       this.bootstrapBoard();
       this.redrawPieces();
@@ -860,7 +881,7 @@
         const target=e.target;
         if(!target) return;
         if(target.name==='preset'){
-          const value=target.value||'classic';
+          const value=target.value||'custom';
           if(value==='custom'){
             this.state.rules = this.cloneDefaultRules(this.readRulesFromForm());
             this.applyBoardDefaultsToRules();
@@ -1454,6 +1475,15 @@
       this.populateRulesForm(this.state.rules);
       this.updateSpecialsLegend();
     },
+    setDefaultRules(){
+      this.state.rules = this.cloneDefaultRules();
+      this.applyBoardDefaultsToRules();
+      this.populateRulesForm(this.state.rules);
+      this.updateSpecialsLegend();
+      const custom=this.$?.formSetup?.querySelector('input[name="preset"][value="custom"]');
+      if(custom) custom.checked=true;
+      if(this.$?.rulesAdvanced){ this.$.rulesAdvanced.open=true; }
+    },
     applyBoardDefaultsToRules(){
       if(!this.state.rules) return;
       const extras=window.GameRules.BOARD.special?.safeTiles?.extra||[];
@@ -1615,7 +1645,7 @@
       this.state.disabledColors={};
       this.state.finishedSlots={};
       this.updateControlAssignments();
-      const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
+      const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'custom';
       if(preset==='custom'){ this.state.rules = this.cloneDefaultRules(this.readRulesFromForm()); this.applyBoardDefaultsToRules(); this.populateRulesForm(this.state.rules); }
       else { this.applyPreset(preset); }
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
