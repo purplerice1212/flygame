@@ -2755,7 +2755,15 @@
       if(isSpace){
         e.preventDefault();
         if(!this.isInteractionPermitted('keyboard')){ this.handleBlockedInteraction('keyboard'); return; }
-        this.rollDice('keyboard');
+        const legalMoves=Array.isArray(this.state.legalMoves)?this.state.legalMoves:[];
+        const hasSingleLegalMove=(legalMoves.length===1);
+        const hasDice=this.state.dice!=null;
+        const bonusActive=!!(this.state.pendingBonus||this.state.bonusSelecting);
+        if(hasSingleLegalMove && (hasDice || bonusActive)){
+          this.applyMove(legalMoves[0],'keyboard');
+        }else{
+          this.rollDice('keyboard');
+        }
         return;
       }
       if(!this.isInteractionPermitted('keyboard')){ this.handleBlockedInteraction('keyboard'); return; }
