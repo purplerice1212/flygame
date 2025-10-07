@@ -396,7 +396,8 @@
           {label:'A',from:7,to:28},
           {label:'A',from:28,to:7},
           {label:'B',from:21,to:46},
-          {label:'B',from:46,to:21}
+          {label:'B',from:46,to:21},
+          {label:'C',from:49,to:13,color:'red'}
         ],
         ownColorJump: {
           enabled:true, steps:4,
@@ -446,7 +447,7 @@
         assign(t.idx,{type:'trap',idx:t.idx,effect:t.effect,label:t.label});
       });
       (BOARD.special?.portals||[]).forEach(p=>{
-        assign(p.from,{type:'portal',from:p.from,to:p.to,label:p.label});
+        assign(p.from,{type:'portal',from:p.from,to:p.to,label:p.label,color:p.color||null});
       });
       return Object.freeze(registry);
     })();
@@ -698,6 +699,7 @@
       while(specialsActive && current.kind==='track'){
         const portal = portalLookup[current.idx];
         if(!portal || portal.type!=='portal' || visitedPortals.has(current.idx) || portalCount>=portalLimit) break;
+        if(portal.color && portal.color!==player.color) break;
         visitedPortals.add(current.idx);
         portalCount+=1;
         current=Pos.track(portal.to); recordPosition(current);
@@ -799,8 +801,7 @@
       this.applyTheme();
       this.renderLastMove();
       this._hudLayers={static:null,dynamic:null};
-      this.state.rules=this.cloneDefaultRules();
-      this.applyBoardDefaultsToRules();
+      this.applyPreset('classic');
       this.renderLobbyPlayers(2);
       this.bootstrapBoard();
       this.redrawPieces();
@@ -849,9 +850,26 @@
       this.$.playerCount.addEventListener('change',e=>this.renderLobbyPlayers(parseInt(e.target.value,10)));
       this.$.formSetup.addEventListener('submit',e=>{ e.preventDefault(); this.startGame(); });
       this.$.formSetup.addEventListener('change',e=>{
-        if(this.$.rulesAdvanced && this.$.rulesAdvanced.contains(e.target)){
+        const target=e.target;
+        if(!target) return;
+        if(target.name==='preset'){
+          const value=target.value||'classic';
+          if(value==='custom'){
+            this.state.rules = this.cloneDefaultRules(this.readRulesFromForm());
+            this.applyBoardDefaultsToRules();
+            this.populateRulesForm(this.state.rules);
+            this.updateSpecialsLegend();
+          }else{
+            this.applyPreset(value);
+          }
+          return;
+        }
+        if(this.$.rulesAdvanced && this.$.rulesAdvanced.contains(target)){
           const custom=this.$.formSetup.querySelector('input[name="preset"][value="custom"]');
           if(custom) custom.checked=true;
+          this.state.rules = this.cloneDefaultRules(this.readRulesFromForm());
+          this.applyBoardDefaultsToRules();
+          this.updateSpecialsLegend();
         }
       });
       this.$.btnQuick.addEventListener('click',()=>{
@@ -1400,6 +1418,7 @@
       else if(name==='fast') this.state.rules = this.cloneDefaultRules({takeoff:'fiveOrSix'});
       else this.state.rules = this.cloneDefaultRules();
       this.applyBoardDefaultsToRules();
+      this.populateRulesForm(this.state.rules);
       this.updateSpecialsLegend();
     },
     applyBoardDefaultsToRules(){
@@ -1414,6 +1433,66 @@
       if(typeof specials.portalLimit!=='number' || Number.isNaN(specials.portalLimit)) specials.portalLimit=1;
       if(typeof specials.enabled!=='boolean') specials.enabled=true;
       this.state.rules.specials=specials;
+    },
+    populateRulesForm(rules){
+      const form=this.$?.formSetup;
+      if(!form || !rules) return;
+      const setRadio=(name,value)=>{
+        const inputs=form.querySelectorAll(`input[name="${name}"]`);
+        let matched=false;
+        inputs.forEach(input=>{
+          if(input && input.tagName==='INPUT' && input.type==='radio'){
+            const shouldCheck=String(input.value)===String(value);
+            input.checked=shouldCheck;
+            if(shouldCheck) matched=true;
+          }
+        });
+        if(!matched && inputs.length>0){
+          const first=inputs[0];
+          if(first && first.tagName==='INPUT' && first.type==='radio'){ first.checked=true; }
+        }
+      };
+      const setCheckbox=(name,value)=>{
+        const input=form.querySelector(`input[name="${name}"]`);
+        if(input && input.tagName==='INPUT' && input.type==='checkbox'){ input.checked=!!value; }
+      };
+      const setNumber=(name,value)=>{
+        const input=form.querySelector(`input[name="${name}"]`);
+        if(input && input.tagName==='INPUT'){
+          if(value==null || Number.isNaN(value)) input.value='';
+          else input.value=String(value);
+        }
+      };
+      const setSelect=(name,value)=>{
+        const select=form.querySelector(`[name="${name}"]`);
+        if(!select || select.tagName!=='SELECT') return;
+        const raw=String(value);
+        const hasValue=Array.from(select.options).some(opt=>opt.value===raw);
+        if(hasValue){ select.value=raw; }
+      };
+      setRadio('takeoff', rules.takeoff||'even');
+      setCheckbox('extraTurnOnSix', rules.extraTurnOnSix!==false);
+      setCheckbox('tripleSixPenalty', rules.tripleSixPenalty);
+      setCheckbox('captureOnLand', rules.captureOnLand!==false);
+      setCheckbox('stackEnabled', rules.stackEnabled!==false);
+      setCheckbox('stackMovesTogether', !!rules.stackMovesTogether);
+      setCheckbox('blockadePassThrough', !!rules.blockadePassThrough);
+      const jumpRules=rules.ownColorJump||{};
+      setCheckbox('ownColorJumpEnabled', jumpRules.enabled!==false);
+      setNumber('ownColorJumpSteps', Math.max(1, parseInt(jumpRules.steps ?? 4,10)||4));
+      const flightRules=rules.dashedFlight||{};
+      setCheckbox('dashedFlightEnabled', flightRules.enabled!==false);
+      setCheckbox('captureOnFlight', flightRules.captureOnLanding!==false);
+      setCheckbox('homeLaneExactEntry', rules.homeLaneExactEntry!==false);
+      setSelect('finishExact', rules.finishExact||'exact');
+      const safeRules=rules.safeTiles||{};
+      setCheckbox('startTileSafe', safeRules.start!==false);
+      const specialsRules=rules.specials||{};
+      setCheckbox('specialsEnabled', specialsRules.enabled!==false);
+      const timer=Math.max(0, parseInt(rules.turnTimerSec??0,10)||0);
+      setNumber('turnTimerSec', timer);
+      setSelect('animSpeed', rules.animSpeed||'normal');
+      setCheckbox('undoEnabled', rules.undoEnabled!==false);
     },
     readRulesFromForm(){
       const f=this.$.formSetup; const chk=n=>!!f.querySelector(`[name="${n}"]`)?.checked; const val=n=>f.querySelector(`[name="${n}"]:checked`)?.value; const num=(n,d)=>{const x=parseInt(f.querySelector(`[name="${n}"]`)?.value??d,10); return isNaN(x)?d:x;};
@@ -1499,7 +1578,7 @@
       this.state.finishedSlots={};
       this.updateControlAssignments();
       const preset=(this.$.formSetup.querySelector('input[name="preset"]:checked')?.value)||'classic';
-      if(preset==='custom'){ this.state.rules = this.cloneDefaultRules(this.readRulesFromForm()); this.applyBoardDefaultsToRules(); }
+      if(preset==='custom'){ this.state.rules = this.cloneDefaultRules(this.readRulesFromForm()); this.applyBoardDefaultsToRules(); this.populateRulesForm(this.state.rules); }
       else { this.applyPreset(preset); }
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       for(const p of players){
@@ -1804,7 +1883,10 @@
         if(info.type==='safe') return '安全格：不可被吃';
         if(info.type==='start') return `${colorLabel[info.color]||''} 起飛格`;
         if(info.type==='jump') return `${colorLabel[info.color]||''} 跳格入口`;
-        if(info.type==='portal') return `傳送門 ${info.label}: ${info.from} → ${info.to}`;
+        if(info.type==='portal'){
+          if(info.color) return `傳送門 ${info.label}（${colorLabel[info.color]||info.color} 專用）：${info.from} → ${info.to}`;
+          return `傳送門 ${info.label}: ${info.from} → ${info.to}`;
+        }
         if(info.type==='power'){
           if(info.effect==='extra-roll') return '增益：再擲一次';
           if(info.effect==='advance-2') return '增益：前進 2 格';
@@ -1836,10 +1918,11 @@
       const portalPairs=new Map();
       (specials.portals||[]).forEach(p=>{
         if(!p || !p.label) return;
-        if(!portalPairs.has(p.label)) portalPairs.set(p.label,new Set());
-        const set=portalPairs.get(p.label);
-        set.add(p.from);
-        set.add(p.to);
+        const key=p.color?`${p.label}-${p.color}`:p.label;
+        if(!portalPairs.has(key)) portalPairs.set(key,{label:p.label,color:p.color||null,indices:new Set()});
+        const entry=portalPairs.get(key);
+        entry.indices.add(p.from);
+        entry.indices.add(p.to);
       });
       const jumpPatterns={};
       const ensureJumpPattern=(col)=>{
@@ -1890,9 +1973,12 @@
           gIcon.appendChild(el('circle',{r:5,fill:'rgba(255,255,255,.9)'}));
           gIcon.appendChild(el('circle',{r:tileSize*0.32,class:'tile-icon tile-ring',stroke:'rgba(255,255,255,.82)'}));
         }else if(specialEntry?.type==='portal'){
-          const accent=color('--accent');
-          gIcon.appendChild(el('circle',{r:tileSize*0.34,class:'tile-icon',stroke:withAlpha(accent,0.9),fill:'none'}));
-          gIcon.appendChild(el('text',{y:1,'text-anchor':'middle','dominant-baseline':'central','font-weight':'700','font-size':14,'fill':'#fff'},[document.createTextNode(specialEntry.label||'●')]));
+          const accentBase=specialEntry.color?color(`--${specialEntry.color}`):color('--accent');
+          const stroke=withAlpha(accentBase,0.9);
+          const fill=specialEntry.color?withAlpha(accentBase,0.24):'none';
+          const textFill=specialEntry.color?'#0b0f14':'#fff';
+          gIcon.appendChild(el('circle',{r:tileSize*0.34,class:'tile-icon',stroke,fill}));
+          gIcon.appendChild(el('text',{y:1,'text-anchor':'middle','dominant-baseline':'central','font-weight':'700','font-size':14,'fill':textFill},[document.createTextNode(specialEntry.label||'●')]));
         }
         const tooltipCandidates=[];
         if(specialEntry) tooltipCandidates.push(tooltipFor(specialEntry));
@@ -1932,28 +2018,34 @@
       }
       if(portalPairs.size>0){
         const portalLines=el('g',{opacity:0.55});
-        portalPairs.forEach((set,label)=>{
-          const points=Array.from(set).map(idx=>geom.track[idx]).filter(Boolean);
+        const colorLabelMap={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
+        portalPairs.forEach(({indices,label,color:portalColor})=>{
+          const points=Array.from(indices).map(idx=>geom.track[idx]).filter(Boolean);
           if(points.length>=2){
             const [p1,p2]=points;
-            portalLines.appendChild(el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:color('--accent'),'stroke-dasharray':'8 6','stroke-width':2.6,'stroke-linecap':'round'}));
+            const strokeColor=portalColor?withAlpha(color(`--${portalColor}`),0.85):color('--accent');
+            portalLines.appendChild(el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:strokeColor,'stroke-dasharray':'8 6','stroke-width':2.6,'stroke-linecap':'round'}));
             const mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
-            portalLines.appendChild(el('text',{x:mid.x,y:mid.y-8,'text-anchor':'middle','font-size':'12','font-weight':'600','fill':color('--accent')},[document.createTextNode(`🌀${label}`)]));
+            const textColor=portalColor?strokeColor:color('--accent');
+            const suffix=portalColor?`·${colorLabelMap[portalColor]||portalColor}`:'';
+            portalLines.appendChild(el('text',{x:mid.x,y:mid.y-8,'text-anchor':'middle','font-size':'12','font-weight':'600','fill':textColor},[document.createTextNode(`🌀${label}${suffix}`)]));
           }
         });
         gSpecials.appendChild(portalLines);
       }
-      const innerLen=340;
+      const laneStartOffset=tileSize*0.65;
+      const centerClearance=isCompact?58:72;
       const laneFor=(idx)=>{
         if(typeof idx!=='number') return null;
-        const t=(idx%total)/total;
-        const p=points[idx%total]||stadiumPoint(t);
-        const {nx,ny}=normalFromAngle(p.tangent);
-        return{
-          start:{x:p.x+nx*8,y:p.y+ny*8},
-          end:{x:p.x+nx*(innerLen+8),y:p.y+ny*(innerLen+8)},
-          angle:Math.atan2(ny,nx)
-        };
+        const tile=geom.track[idx];
+        if(!tile) return null;
+        const vecToCenter={x:cx-tile.x,y:cy-tile.y};
+        const dist=Math.hypot(vecToCenter.x,vecToCenter.y)||1;
+        const ux=vecToCenter.x/dist;
+        const uy=vecToCenter.y/dist;
+        const start={x:tile.x+ux*laneStartOffset,y:tile.y+uy*laneStartOffset};
+        const end={x:cx-ux*centerClearance,y:cy-uy*centerClearance};
+        return{start,end,angle:Math.atan2(uy,ux)};
       };
       const lanes={
         red:laneFor(entryIdx.red),
@@ -2002,11 +2094,11 @@
         const dir={x:lane.end.x-lane.start.x,y:lane.end.y-lane.start.y};
         const len=Math.hypot(dir.x,dir.y)||1;
         const ux=dir.x/len,uy=dir.y/len;
-        const spacing=tileSize+10; const offset=tileSize*0.6;
+        const step=(homeLen>1)?len/(homeLen-1):len;
         const perp={x:-uy,y:ux};
         geom.home[col]=[];
         for(let i=0;i<homeLen;i++){
-          const dist=offset+i*spacing;
+          const dist=step*i;
           const x=lane.start.x+ux*dist; const y=lane.start.y+uy*dist;
           geom.home[col][i]={x,y};
           const along=tileSize*0.5;
@@ -2090,6 +2182,8 @@
         if(gGrid) gGrid.appendChild(group);
       }
       gSpecials.appendChild(gRunways);
+      if(svg && this.$?.gPieces) svg.appendChild(this.$.gPieces);
+      if(svg && this.$?.gHL) svg.appendChild(this.$.gHL);
       this.clearGhostPath();
     },
     clearGhostPath(){
@@ -2867,6 +2961,7 @@
       const loadedRules=snapshot.rules? this.cloneDefaultRules(snapshot.rules) : this.cloneDefaultRules();
       this.state.rules=loadedRules;
       this.applyBoardDefaultsToRules();
+      this.populateRulesForm(this.state.rules);
       this.state.dice=snapshot.dice??null;
       this.state.consecutiveSixes=snapshot.consecutiveSixes||{};
       this.state.skipTurns=snapshot.skipTurns||{};
