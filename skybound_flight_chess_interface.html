@@ -60,6 +60,8 @@
     g[data-finished="true"] .plane-token{opacity:.9;}
     g[data-disabled="true"] .plane-token{opacity:.4;}
     g[data-disabled="true"] text{opacity:.4;}
+    #layer-highlights{pointer-events:none;}
+    #layer-highlights *{pointer-events:none;}
     .finish-badge circle{fill:rgba(15,23,42,.82);stroke:rgba(255,255,255,.82);stroke-width:2}
     .runway-tile{fill:rgba(255,255,255,.08);stroke-width:2}
     .runway-red{stroke:var(--red)}
@@ -272,8 +274,8 @@
           <g id="layer-tiles"></g>
           <g id="layer-specials"></g>
           <g id="layer-hud"></g>
-          <g id="layer-pieces"></g>
           <g id="layer-highlights"></g>
+          <g id="layer-pieces"></g>
         </svg>
         <div id="board-overlay" aria-hidden="true"></div>
       </div>
