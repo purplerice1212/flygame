@@ -2798,12 +2798,13 @@
         },0);
         if(finishedCount>=perPlayerPieces && !this.state.finishOrder.includes(pid)){
           this.state.finishOrder.push(pid);
-          if(!this.state.winner) this.state.winner=pid;
+          const isFirstFinisher=!this.state.winner;
+          if(isFirstFinisher) this.state.winner=pid;
           this.state.disabledColors[pid]=true;
-          if(typeof window!=='undefined' && typeof window.showWinnerEffect==='function'){
+          if(isFirstFinisher && typeof window!=='undefined' && typeof window.showWinnerEffect==='function'){
             try{ window.showWinnerEffect(pid); }catch(err){ console.warn('showWinnerEffect failed',err); }
           }
-          if(typeof window!=='undefined' && typeof window.showWinnerModal==='function'){
+          if(isFirstFinisher && typeof window!=='undefined' && typeof window.showWinnerModal==='function'){
             try{ window.showWinnerModal(pid,{finishOrder:this.state.finishOrder}); }catch(err){ /* noop */ }
           }
           const emitter=(typeof window!=='undefined' && typeof window.emit==='function')?window.emit:null;
