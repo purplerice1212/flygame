@@ -2750,7 +2750,11 @@
       return null;
     },
     redrawPieces(){
-      const g=this.$.gPieces; g.innerHTML='';
+      const g=this.$.gPieces;
+      if(g?.parentNode && g.parentNode.lastChild!==g){
+        g.parentNode.appendChild(g);
+      }
+      g.innerHTML='';
       g.onclick=(e)=>{
         if(this.state.animating) return;
         if(!this.isInteractionPermitted('mouse')){ this.handleBlockedInteraction('mouse'); return; }
@@ -2988,15 +2992,9 @@
 
         this.state.finishOrder=this.state.finishOrder||[];
         this.state.disabledColors=this.state.disabledColors||{};
-        const allPieces=[];
-        this.state.players.forEach(pl=>{
-          (this.state.pieces[pl.id]||[]).forEach(pc=>{
-            allPieces.push({playerId:pl.id,pos:pc?.pos});
-          });
-        });
         const perPlayerPieces=(window.GameRules?.BOARD?.bases?.perPlayer)||4;
-        const finishedCount=allPieces.reduce((acc,entry)=>{
-          return acc + ((entry.playerId===pid && entry.pos && entry.pos.kind==='finished')?1:0);
+        const finishedCount=(this.state.pieces?.[pid]||[]).reduce((count,pc)=>{
+          return count + ((pc?.pos?.kind==='finished')?1:0);
         },0);
         if(finishedCount>=perPlayerPieces && !this.state.finishOrder.includes(pid)){
           this.state.finishOrder.push(pid);
