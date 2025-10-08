@@ -514,10 +514,13 @@
     function buildOccupancy(state){
       const occ={ track:Array(BOARD.track.length).fill(0).map(()=>({})), home:{} };
       const players=Array.isArray(state?.players)?state.players:[];
-      const piecesByPlayer=(state&&typeof state==='object'&&state.pieces)?state.pieces:{};
+      const piecesByPlayer=(state&&typeof state==='object'&&state.pieces&&typeof state.pieces==='object')?state.pieces:{};
       for(const player of players){
-        const pieces=Array.isArray(piecesByPlayer[player.id])?piecesByPlayer[player.id]:[];
-        for(const pc of pieces){
+        if(!player || typeof player!=='object') continue;
+        const playerId=player.id;
+        if(typeof playerId!=='string'&&typeof playerId!=='number') continue;
+        const playerPieces=Array.isArray(piecesByPlayer[playerId])?piecesByPlayer[playerId]:[];
+        for(const pc of playerPieces){
           const pos=pc?.pos;
           if(!pos) continue;
           if(pos.kind==='track'){
