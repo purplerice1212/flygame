@@ -112,6 +112,23 @@
     body[data-theme="high"] #last-move-captured li{background:rgba(248,250,252,0.18);color:#f8fafc}
     .toast-message{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;margin-top:6px;border-radius:999px;background:rgba(34,211,238,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 14px rgba(8,47,73,0.3);opacity:0;transform:translateY(-4px);transition:opacity .18s ease,transform .22s ease}
     .toast-message[data-show="true"]{opacity:1;transform:translateY(0)}
+    .info-list{margin:6px 0 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+    .info-list li{line-height:1.45}
+    .winner-celebration{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1600;opacity:0;transition:opacity .35s ease}
+    .winner-celebration[data-active="true"]{opacity:1}
+    .winner-celebration__banner{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 28px;border-radius:18px;background:rgba(15,23,42,0.82);box-shadow:0 18px 38px rgba(15,23,42,0.55);text-align:center}
+    body[data-theme="light"] .winner-celebration__banner{background:rgba(241,245,249,0.9);color:#0f172a}
+    body[data-theme="high"] .winner-celebration__banner{background:rgba(2,6,23,0.92);border:1px solid rgba(248,250,252,0.35)}
+    .winner-celebration__title{margin:0;font-size:1.6rem;font-weight:800}
+    .winner-celebration__subtitle{margin:0;font-size:1rem;color:var(--muted)}
+    body[data-theme="light"] .winner-celebration__subtitle{color:#475569}
+    body[data-theme="high"] .winner-celebration__subtitle{color:#e2e8f0}
+    .winner-celebration__confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+    .confetti-piece{position:absolute;top:-12vh;width:8px;height:18px;border-radius:4px;opacity:.9;background:var(--accent);animation:confetti-fall var(--duration,2.8s) linear forwards;animation-delay:var(--delay,0s);transform:translate3d(0,-10vh,0) rotate(0deg)}
+    body[data-theme="light"] .confetti-piece{filter:brightness(0.95)}
+    @keyframes confetti-fall{0%{transform:translate3d(0,-12vh,0) rotate(0deg);opacity:0}10%{opacity:1}100%{transform:translate3d(var(--x-drift,0),110vh,0) rotate(720deg);opacity:0}}
+    .finish-order-list{margin:8px 0 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+    .finish-order-list li{line-height:1.4}
     body[data-view="lobby"] #view-game aside{opacity:.4;pointer-events:none}
     #specials-legend{border:1px solid #1f2937;border-radius:12px;padding:12px;background:rgba(15,23,42,0.6)}
     #specials-legend ul{margin:8px 0 0 0;padding-left:0;display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:#e2e8f0;list-style:none}
@@ -352,8 +369,38 @@
     <form method="dialog" class="card" style="min-width:320px">
       <h3 id="dialog-about-title" class="section-title">說明</h3>
       <p class="muted">在同一裝置上輪流操作的本地多人飛行棋。支援規則自訂與續盤。</p>
+      <section aria-label="基本規則" style="margin-top:8px">
+        <h4 class="section-title" style="font-size:1rem;margin:0">基本規則</h4>
+        <ul class="info-list">
+          <li>擲到 6 才能讓基地中的飛機起飛，並獲得追加擲骰機會。</li>
+          <li>飛機依擲出的點數沿著外圈軌道前進；同色可疊在一起行動。</li>
+          <li>落在對手單獨佔據的格子可將其打回基地，但安全格除外。</li>
+          <li>進入己方家路時需剛好踏入；超出的處理方式依規則設定。</li>
+        </ul>
+        <p class="muted" style="margin:8px 0 0">勝利條件：最先把所有飛機降落終點，即獲勝。</p>
+      </section>
       <div class="row" style="margin-top:12px">
         <button class="btn" value="cancel">知道了</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dialog-victory" aria-labelledby="dialog-victory-title" aria-describedby="dialog-victory-desc">
+    <form method="dialog" class="card" style="min-width:320px;max-width:420px">
+      <h3 id="dialog-victory-title" class="section-title">🎉 比賽結束！</h3>
+      <p id="dialog-victory-desc" class="muted">
+        <strong data-winner-name>玩家</strong>
+        <span data-winner-color class="muted" style="font-weight:600"></span>
+        率先完成所有飛機的降落。
+      </p>
+      <p class="muted" data-victory-subtitle>恭喜！你可以記錄戰績或直接再來一局。</p>
+      <section id="victory-order" hidden>
+        <h4 class="section-title" style="font-size:1rem;margin:8px 0 4px">完賽名次</h4>
+        <ol class="finish-order-list" data-finish-order></ol>
+      </section>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" value="cancel">好</button>
+        <button class="btn" data-action="restart" type="button">重開局</button>
       </div>
     </form>
   </dialog>
@@ -791,6 +838,7 @@
       return typeof dlg.showModal==='function';
     }catch(e){ return false; }
   })();
+  const COLOR_LABELS={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
   const openDialogSafe = (dialog)=>{
     if(!dialog) return;
     if(supportsDialog && typeof dialog.showModal==='function'){
@@ -860,7 +908,8 @@
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gBack:$('#layer-background'), gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gHud:$('#layer-hud'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
         boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order'),
-        theme:$('#theme'), rulesAdvanced:$('#rules-advanced'), lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last')
+        theme:$('#theme'), rulesAdvanced:$('#rules-advanced'), lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last'),
+        dialogVictory:$('#dialog-victory'), victoryWinnerName:document.querySelector('[data-winner-name]'), victoryWinnerColor:document.querySelector('[data-winner-color]'), victorySubtitle:document.querySelector('[data-victory-subtitle]'), victoryOrder:$('#victory-order'), victoryList:document.querySelector('[data-finish-order]')
       };
     },
     setButtonDisabled(button, disabled){
@@ -975,10 +1024,21 @@
       }
       const settingsDialog=$('#dialog-settings');
       const aboutDialog=$('#dialog-about');
+      const victoryDialog=this.$.dialogVictory;
       attachDialogFallback(settingsDialog);
       attachDialogFallback(aboutDialog);
+      attachDialogFallback(victoryDialog);
       $('#btn-settings').addEventListener('click',()=>openDialogSafe(settingsDialog));
       $('#btn-about').addEventListener('click',()=>openDialogSafe(aboutDialog));
+      if(victoryDialog){
+        const restartBtn=victoryDialog.querySelector('[data-action="restart"]');
+        if(restartBtn){
+          restartBtn.addEventListener('click',()=>{
+            closeDialogSafe(victoryDialog);
+            this.restartGame();
+          });
+        }
+      }
       this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); this.updateControlAssignments(); this.renderHints(); this.updateTurnPrompt(true); });
       if(!this._handleKeyDown){
         this._handleKeyDown=e=>this.onKey(e);
@@ -1652,6 +1712,9 @@
         return;
       }
       if(players.length<2){ this.showToast('請至少設定 2 位擁有不同顏色的玩家'); this.log('至少需要 2 位玩家'); this.updateBoardOverlay(); return; }
+      if(this.$?.dialogVictory) closeDialogSafe(this.$.dialogVictory);
+      const celebration=document.getElementById('winner-celebration');
+      if(celebration && celebration.parentNode) celebration.parentNode.removeChild(celebration);
       this.state.players=players; this.normalizePlayerControls(); this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       this.state.consecutiveSixes={};
       this.state.skipTurns={};
@@ -1736,6 +1799,9 @@
         this.log('未有進行中的對局');
         return;
       }
+      if(this.$?.dialogVictory) closeDialogSafe(this.$.dialogVictory);
+      const celebration=document.getElementById('winner-celebration');
+      if(celebration && celebration.parentNode) celebration.parentNode.removeChild(celebration);
       this.updateControlAssignments();
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       this.state.pieces={};
@@ -3522,6 +3588,118 @@
     pulseAt(x,y,color){ const g=this.$.gHL; if(!g) return; const NS='http://www.w3.org/2000/svg'; const ring=document.createElementNS(NS,'circle'); ring.setAttribute('cx',x); ring.setAttribute('cy',y); ring.setAttribute('r','8'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',color); ring.setAttribute('stroke-width','3'); ring.setAttribute('opacity','0.9'); g.appendChild(ring); let r=8; const id=setInterval(()=>{ r+=4; ring.setAttribute('r',r); const op=parseFloat(ring.getAttribute('opacity')); ring.setAttribute('opacity',String(Math.max(0,op-0.12))); if(r>36){ clearInterval(id); if(ring.parentNode) ring.parentNode.removeChild(ring);} },16); },
     computeThreatFaces(targetIdx){ const L=window.GameRules.BOARD.track.length; const me=this.currentPlayer(); const faces=new Set(); for(const opp of this.state.players){ if(opp.id===me.id) continue; const oppPieces=this.state.pieces[opp.id]||[]; for(const pc of oppPieces){ if(pc.pos.kind!=='track') continue; const d=((targetIdx-pc.pos.idx)%L+L)%L; if(d>=1&&d<=6) faces.add(d); } } return Array.from(faces).sort((a,b)=>a-b); },
     showThreatBadge(x,y,faces){ const g=this.$.gHL; g.querySelectorAll('.threat-badge').forEach(n=>n.remove()); if(!faces||faces.length===0) return; const NS='http://www.w3.org/2000/svg'; const bx=x+26,by=y-26; const badge=document.createElementNS(NS,'g'); badge.setAttribute('class','threat-badge'); const rect=document.createElementNS(NS,'rect'); const label=faces.join('/'); const padding=6; const width=Math.max(24,label.length*7+padding*2); rect.setAttribute('x',bx-width/2); rect.setAttribute('y',by-10); rect.setAttribute('width',width); rect.setAttribute('height',20); rect.setAttribute('rx',6); rect.setAttribute('fill','#ef4444'); rect.setAttribute('stroke','#000'); rect.setAttribute('stroke-width','2'); const txt=document.createElementNS(NS,'text'); txt.setAttribute('x',bx); txt.setAttribute('y',by+5); txt.setAttribute('text-anchor','middle'); txt.setAttribute('font-size','12'); txt.setAttribute('fill','#0b0f14'); txt.textContent=label; badge.appendChild(rect); badge.appendChild(txt); g.appendChild(badge); }
+  };
+  const getPlayerInfoById=(playerId)=>{
+    try{
+      const players=App?.state?.players;
+      if(!Array.isArray(players)) return null;
+      return players.find(p=>p && p.id===playerId) || null;
+    }catch(err){ return null; }
+  };
+  const formatPlayerDisplay=(player,fallbackId=null)=>{
+    if(!player || typeof player!=='object'){
+      const fallback=(fallbackId||'').toString().trim();
+      return {name:fallback||'玩家',colorLabel:'',color:''};
+    }
+    const preferred=(player.name||'').trim();
+    const fallback=(fallbackId||'').toString().trim();
+    const name=preferred||fallback||'玩家';
+    const color=(player.color||'').trim();
+    const colorLabel=COLOR_LABELS[color]||color||'';
+    return {name,colorLabel,color};
+  };
+  window.showWinnerEffect=(playerId)=>{
+    try{
+      const player=formatPlayerDisplay(getPlayerInfoById(playerId),playerId);
+      const overlayId='winner-celebration';
+      let overlay=document.getElementById(overlayId);
+      if(!overlay){
+        overlay=document.createElement('div');
+        overlay.id=overlayId;
+        overlay.className='winner-celebration';
+        overlay.innerHTML='<div class="winner-celebration__confetti" aria-hidden="true"></div>'+
+          '<div class="winner-celebration__banner" role="status" aria-live="assertive">'+
+          '<p class="winner-celebration__title"></p>'+
+          '<p class="winner-celebration__subtitle"></p>'+
+          '</div>';
+        document.body.appendChild(overlay);
+      }
+      const titleEl=overlay.querySelector('.winner-celebration__title');
+      const subtitleEl=overlay.querySelector('.winner-celebration__subtitle');
+      if(titleEl) titleEl.textContent=`${player.name} 勝出！`;
+      if(subtitleEl){
+        const detail=player.colorLabel?`（${player.colorLabel}）`:'';
+        subtitleEl.textContent=`${detail?detail+' ':''}率先將所有飛機降落終點`;
+      }
+      overlay.setAttribute('data-active','true');
+      if(player.color) overlay.dataset.color=player.color;
+      const confettiHost=overlay.querySelector('.winner-celebration__confetti');
+      if(confettiHost){
+        const reduceMotion=typeof window!=='undefined' && typeof window.matchMedia==='function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        confettiHost.innerHTML='';
+        if(!reduceMotion){
+          const palette=[`var(--${player.color||'accent'})`,'var(--accent)','rgba(244,114,182,0.9)','rgba(250,204,21,0.95)','rgba(56,189,248,0.92)'];
+          const pieces=120;
+          for(let i=0;i<pieces;i++){
+            const piece=document.createElement('span');
+            piece.className='confetti-piece';
+            piece.style.left=`${Math.random()*100}%`;
+            piece.style.setProperty('--delay',`${(Math.random()*0.6).toFixed(2)}s`);
+            piece.style.setProperty('--duration',`${(2.6+Math.random()*1.6).toFixed(2)}s`);
+            piece.style.setProperty('--x-drift',`${(Math.random()*60-30).toFixed(2)}vw`);
+            piece.style.background=palette[i%palette.length];
+            confettiHost.appendChild(piece);
+          }
+        }
+      }
+      if(overlay._hideTimer) clearTimeout(overlay._hideTimer);
+      if(overlay._removeTimer) clearTimeout(overlay._removeTimer);
+      overlay._hideTimer=setTimeout(()=>{
+        overlay.setAttribute('data-active','false');
+        overlay._removeTimer=setTimeout(()=>{
+          if(overlay && overlay.parentNode){
+            overlay.parentNode.removeChild(overlay);
+          }
+        },420);
+      },4600);
+    }catch(err){
+      console.warn('showWinnerEffect failed',err);
+    }
+  };
+  window.showWinnerModal=(playerId,options={})=>{
+    const dialog=(App?.$.dialogVictory)||document.getElementById('dialog-victory');
+    if(!dialog) return;
+    const player=formatPlayerDisplay(getPlayerInfoById(playerId),playerId);
+    const nameEl=(App?.$.victoryWinnerName)||dialog.querySelector('[data-winner-name]');
+    const colorEl=(App?.$.victoryWinnerColor)||dialog.querySelector('[data-winner-color]');
+    const subtitleEl=(App?.$.victorySubtitle)||dialog.querySelector('[data-victory-subtitle]');
+    const orderSection=(App?.$.victoryOrder)||dialog.querySelector('#victory-order');
+    const listEl=(App?.$.victoryList)||dialog.querySelector('[data-finish-order]');
+    if(nameEl) nameEl.textContent=player.name;
+    if(colorEl){
+      colorEl.textContent=player.colorLabel?`（${player.colorLabel}）`:'';
+      colorEl.style.color=player.color?`var(--${player.color})`:'inherit';
+    }
+    if(subtitleEl) subtitleEl.textContent='想再戰一局嗎？按「重開局」即可立刻開始新回合。';
+    if(listEl){
+      listEl.innerHTML='';
+      const finishOrder=Array.isArray(options.finishOrder)?options.finishOrder:[];
+      if(finishOrder.length>0){
+        finishOrder.forEach((pid,idx)=>{
+          const info=formatPlayerDisplay(getPlayerInfoById(pid),pid);
+          const li=document.createElement('li');
+          let label=`${idx+1}. ${info.name}`;
+          if(info.colorLabel) label+=`（${info.colorLabel}）`;
+          if(pid===playerId) label+=' 🏆';
+          li.textContent=label;
+          listEl.appendChild(li);
+        });
+        if(orderSection) orderSection.hidden=false;
+      }else if(orderSection){
+        orderSection.hidden=true;
+      }
+    }
+    openDialogSafe(dialog);
   };
   window.App = App; window.addEventListener('DOMContentLoaded',()=>App.init());
   // ============================= End App ===============================
