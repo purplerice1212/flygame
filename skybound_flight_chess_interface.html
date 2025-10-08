@@ -245,7 +245,7 @@
                 </fieldset>
                 <fieldset>
                   <legend>終點</legend>
-                  <label><input type="checkbox" name="homeLaneExactEntry" checked> 入家路要精準</label>
+                  <label><input type="checkbox" name="homeLaneExactEntry"> 入家路要精準</label>
                   <label>
                     完成規則
                     <select name="finishExact">
@@ -600,7 +600,7 @@
       takeoff:"even", extraTurnOnSix:true, tripleSixPenalty:false,
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
-      homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
+      homeLaneExactEntry:false, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
       specials:{enabled:true,portalLimit:1,portalBypassBlockade:true},
       turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
     };
@@ -768,8 +768,8 @@
       while(remaining>0){
         if(current.kind==='track'){
           if(current.idx===entryIdx){
-            const enteringFromStart = stepsTaken===0;
-            const allowImmediateEntry = enteringFromStart && (!rules.homeLaneExactEntry || remaining===1);
+            // 如有步數便可立即進入家路（經典）；若啟用精準入場則需剛好一步。
+            const allowImmediateEntry = rules.homeLaneExactEntry ? (remaining===1) : (remaining>0);
             if(allowImmediateEntry){
               current=Pos.home(0);
               remaining-=1;
@@ -783,7 +783,7 @@
           if(!rules.blockadePassThrough && isEnemyBlockade(nextIdx)) return {legal:false,reason:'blocked-by-enemy-stack',events};
           current=Pos.track(nextIdx); remaining-=1; stepsTaken+=1; recordPosition(current);
           if(current.idx===entryIdx){
-            const allowEntry = !rules.homeLaneExactEntry || remaining===0;
+            const allowEntry = rules.homeLaneExactEntry ? (remaining===0) : true;
             if(allowEntry){
               current=Pos.home(0); recordPosition(current);
               events.push({type:'enter-home'});
@@ -2060,7 +2060,29 @@
       const svg=this.$.svg; const W=1000,H=1000; svg.setAttribute('viewBox',`0 0 ${W} ${H}`); const cx=W/2,cy=H/2,r=380;
       const gBack=this.$.gBack,gGrid=this.$.gGrid,gTiles=this.$.gTiles,gSpecials=this.$.gSpecials,gHud=this.$.gHud,gPieces=this.$.gPieces,gHL=this.$.gHL;
       if(gBack) gBack.innerHTML='';
-      if(gGrid) gGrid.innerHTML='';
+      if(gGrid){
+        gGrid.innerHTML='';
+        const gridColor=(getComputedStyle(document.body).getPropertyValue('--tile-grid')||'#374151').trim()||'#374151';
+        const mkLine=(x1,y1,x2,y2)=>{
+          const ln=document.createElementNS(SVG_NS,'line');
+          ln.setAttribute('x1',x1); ln.setAttribute('y1',y1);
+          ln.setAttribute('x2',x2); ln.setAttribute('y2',y2);
+          ln.setAttribute('stroke',gridColor);
+          ln.setAttribute('stroke-width','1.5');
+          ln.setAttribute('stroke-dasharray','6 6');
+          ln.setAttribute('opacity','0.6');
+          return ln;
+        };
+        const center=500;
+        gGrid.appendChild(mkLine(center,0,center,1000));
+        gGrid.appendChild(mkLine(0,center,1000,center));
+        const dot=document.createElementNS(SVG_NS,'circle');
+        dot.setAttribute('cx',center); dot.setAttribute('cy',center);
+        dot.setAttribute('r','5');
+        dot.setAttribute('fill',gridColor);
+        dot.setAttribute('opacity','0.6');
+        gGrid.appendChild(dot);
+      }
       gTiles.innerHTML=gSpecials.innerHTML=gPieces.innerHTML=gHL.innerHTML='';
       if(gHud){
         gHud.innerHTML='';
