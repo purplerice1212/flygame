@@ -2682,6 +2682,7 @@
       this.pushHistory();
       const pid=this.state.turn;
       const player=this.currentPlayer();
+      const playerLabel=this.formatPlayerName(player,{includeDifficulty:true});
       let movingIndices=Array.isArray(move.stack)?move.stack.slice():[move.pieceIndex];
       if(!movingIndices.includes(move.pieceIndex)) movingIndices.push(move.pieceIndex);
       movingIndices=Array.from(new Set(movingIndices)).sort((a,b)=>a-b);
