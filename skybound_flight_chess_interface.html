@@ -854,8 +854,13 @@
     },
     setButtonDisabled(button, disabled){
       if(!button) return;
-      button.disabled=!!disabled;
-      button.setAttribute('aria-disabled', disabled?'true':'false');
+      const isDisabled=!!disabled;
+      button.disabled=isDisabled;
+      if(isDisabled){
+        button.setAttribute('aria-disabled','true');
+      }else{
+        button.removeAttribute('aria-disabled');
+      }
     },
     hasSavedGame(){
       try{
