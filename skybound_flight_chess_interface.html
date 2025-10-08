@@ -513,13 +513,21 @@
 
     function buildOccupancy(state){
       const occ={ track:Array(BOARD.track.length).fill(0).map(()=>({})), home:{} };
-      for(const p of state.players){
-        for(const pc of state.pieces[p.id]){
-          const pos=pc.pos;
-          if(pos.kind==='track') occ.track[pos.idx][p.color]=(occ.track[pos.idx][p.color]||0)+1;
-          else if(pos.kind==='home'){
-            if(!occ.home[p.color]) occ.home[p.color]=Array(BOARD.homeLane.length).fill(0);
-            occ.home[p.color][pos.idx]+=1;
+      const players=Array.isArray(state?.players)?state.players:[];
+      const piecesByPlayer=(state&&typeof state==='object'&&state.pieces)?state.pieces:{};
+      for(const player of players){
+        const pieces=Array.isArray(piecesByPlayer[player.id])?piecesByPlayer[player.id]:[];
+        for(const pc of pieces){
+          const pos=pc?.pos;
+          if(!pos) continue;
+          if(pos.kind==='track'){
+            if(typeof pos.idx!=='number' || Number.isNaN(pos.idx)) continue;
+            const bucket=occ.track[pos.idx]||(occ.track[pos.idx]={});
+            bucket[player.color]=(bucket[player.color]||0)+1;
+          }else if(pos.kind==='home'){
+            if(typeof pos.idx!=='number' || Number.isNaN(pos.idx)) continue;
+            if(!occ.home[player.color]) occ.home[player.color]=Array(BOARD.homeLane.length).fill(0);
+            occ.home[player.color][pos.idx]+=1;
           }
         }
       }
