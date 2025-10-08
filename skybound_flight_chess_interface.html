@@ -238,7 +238,8 @@
                 <fieldset>
                   <legend>特殊格</legend>
                   <label><input type="checkbox" name="specialsEnabled" checked> 啟用傳送門／增益／陷阱</label>
-                  <p class="muted" style="margin:4px 0 0">順序：跳格 → 飛行 → 傳送門 → 增益 → 陷阱</p>
+                  <label><input type="checkbox" name="portalBypassBlockade" checked> 傳送門忽略堵路</label>
+                  <p class="muted" style="margin:4px 0 0">順序：⤴️ 自色跳格 → 🪂 虛線飛行 → 🌀 傳送門 → 🎲 增壓 → ⚠️ 亂流</p>
                 </fieldset>
                 <fieldset>
                   <legend>終點</legend>
@@ -331,11 +332,13 @@
           <h3 class="section-title" style="font-size:1rem">特殊格圖例</h3>
           <p class="muted status-line">特殊格目前：<span data-specials-status>啟用</span></p>
           <ul>
+            <li><span class="legend-icon">⤴️</span>自色跳格：落在自色入口時向前跳躍（預設 +4 格）</li>
+            <li><span class="legend-icon">🪂</span>虛線飛行：沿虛線飛至目的地，可依規則決定是否吃子</li>
             <li><span class="legend-icon">🌀</span>傳送門：瞬移至配對點（每次落地最多 1 次）</li>
             <li><span class="legend-icon">🎲</span>增壓：獲得額外擲骰或增益移動</li>
             <li><span class="legend-icon">⚠️</span>亂流：下回合停飛一輪</li>
           </ul>
-          <p class="muted" style="margin-top:6px">結算順序：<span id="specials-order"></span></p>
+          <p class="muted" style="margin-top:6px">結算順序（固定）：<span id="specials-order"></span></p>
         </section>
       </aside>
     </section>
@@ -550,7 +553,15 @@
     BOARD.special.ownColorJump.lookupByIndex = OWN_COLOR_JUMP_DATA.lookupByIndex;
 
     function validateBoard(BOARD){
-      const safe = new Set(BOARD.special?.safeTiles?.extra||[]);
+      const safe = new Set([
+        ...((BOARD.special?.safeTiles?.extra)||[]),
+        ...((BOARD.special?.safeTiles?.list)||[])
+      ]);
+      if(BOARD.special?.safeTiles?.start!==false){
+        Object.values(BOARD.track?.startIndex||{}).forEach(idx=>{
+          if(typeof idx==='number') safe.add(idx);
+        });
+      }
       const map = new Map();
       const reg = (idx,type)=>{
         if(typeof idx!=='number') return;
@@ -588,7 +599,7 @@
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
       homeLaneExactEntry:true, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
-      specials:{enabled:true,portalLimit:1},
+      specials:{enabled:true,portalLimit:1,portalBypassBlockade:true},
       turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
     };
 
@@ -661,8 +672,10 @@
     }
 
     function generateLegalMoves(state,rules,dice){
+      generateLegalMoves.lastWarnings=[];
       const player = state.players.find(p=>p.id===state.turn);
       if(!player) return [];
+      const warnings=[];
       const occ = buildOccupancy(state);
       const myPieces = state.pieces[player.id]||[];
       const moves=[];
@@ -701,14 +714,18 @@
               const pathRecord=[clone(final)];
               const special=resolveSpecialsAfterLanding(player,final,rules,occ,events,{recordPath:true,pathRecord});
               final=special.final; const eventLog=special.events; const effectsLog=special.effects||[];
-              const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight});
+              const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight,viaPortal:special.viaPortal});
               const path=(special.path&&special.path.length?special.path:pathRecord);
               let blockedByAlly=false;
               if(final.kind==='track' && rules.stackEnabled===false){
                 const occDest=occ.track[final.idx]||{};
                 if((occDest[player.color]||0)>0) blockedByAlly=true;
               }
-              if(!(capture?.blocked) && !blockedByAlly) moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i],path});
+              if(!(capture?.blocked) && !blockedByAlly){
+                moves.push({pieceIndex:i,kind:'takeoff',dice,from:pos,to:final,events:eventLog,effects:effectsLog,capture,stack:[i],path});
+              }else if(capture?.blocked && capture.reason==='enemy-blockade' && capture.viaPortal){
+                warnings.push({type:'portal-blocked',idx:final.idx,playerId:player.id,source:'takeoff'});
+              }
             }
           }
           return;
@@ -731,6 +748,7 @@
           moves.push({pieceIndex:i,kind:'move',dice,from:pos,to:sim.final,events:sim.events,effects:sim.effects||[],capture:sim.capture,stack:group,path:sim.path||[]});
         }
       });
+      generateLegalMoves.lastWarnings=warnings;
       return moves;
     }
 
@@ -748,9 +766,15 @@
       while(remaining>0){
         if(current.kind==='track'){
           if(current.idx===entryIdx){
-            if(stepsTaken===0 || !rules.homeLaneExactEntry){
-              if(remaining<=0) break;
-              current=Pos.home(0); remaining-=1; stepsTaken+=1; events.push({type:'enter-home'}); continue;
+            const enteringFromStart = stepsTaken===0;
+            const allowImmediateEntry = enteringFromStart && (!rules.homeLaneExactEntry || remaining===1);
+            if(allowImmediateEntry){
+              current=Pos.home(0);
+              remaining-=1;
+              stepsTaken+=1;
+              events.push({type:'enter-home'});
+              recordPosition(current);
+              continue;
             }
           }
           const nextIdx = mod(current.idx+1, BOARD.track.length);
@@ -805,7 +829,7 @@
       if(current.kind==='track'){
         const special=resolveSpecialsAfterLanding(player,current,rules,occ,events,{recordPath,pathRecord});
         current=special.final; events=special.events; specialEffects=special.effects||[];
-        capture=resolveCaptureOnTrack(player,current,rules,occ,{viaFlight:special.viaFlight});
+        capture=resolveCaptureOnTrack(player,current,rules,occ,{viaFlight:special.viaFlight,viaPortal:special.viaPortal});
         if(capture?.blocked) return {legal:false,reason:'land-on-enemy-blockade',events};
       } else if(current.kind==='home'){
         if(current.idx===BOARD.homeLane.length-1){ current=Pos.finished(); events.push({type:'finish'}); if(recordPath && pathRecord) pathRecord.push(clone(current)); }
@@ -818,6 +842,7 @@
       // own-colour jump → flight → limited portal hops → power-ups → traps.
       let current=clone(pos);
       let viaFlight=false;
+      let viaPortal=false;
       const effects=[];
       const recordPath=options.recordPath===true;
       const pathRecord=recordPath?(options.pathRecord||[]):null;
@@ -868,6 +893,7 @@
         portalCount+=1;
         current=Pos.track(portal.to); recordPosition(current);
         events.push({type:'portal',label:portal.label,from:portal.from,to:portal.to});
+        viaPortal=true;
       }
       if(specialsActive && current.kind==='track'){
         const entry = portalLookup[current.idx];
@@ -879,7 +905,7 @@
           events.push(detail); effects.push(detail);
         }
       }
-      return {final:current,events,viaFlight,effects,path:pathRecord};
+      return {final:current,events,viaFlight,viaPortal,effects,path:pathRecord};
     }
 
     function resolveCaptureOnTrack(player,pos,rules,occ,context={}){
@@ -889,7 +915,14 @@
       if(context?.viaFlight && (!boardAllowsFlightCapture || flightRule.captureOnLanding===false)) return null;
       const tileOcc=occ.track[pos.idx];
       const enemyEntries=Object.entries(tileOcc).filter(([c,n])=>c!==player.color && n>0);
-      if(enemyEntries.some(([,n])=>n>=2) && !rules.blockadePassThrough) return {blocked:true};
+      const hasEnemyBlockade = enemyEntries.some(([,n])=>n>=2);
+      if(hasEnemyBlockade){
+        const portalBypassAllowed = context?.viaPortal && !(rules?.specials?.portalBypassBlockade===false);
+        const blockadeBypassAllowed = !!(rules && rules.blockadePassThrough) || portalBypassAllowed;
+        if(!blockadeBypassAllowed){
+          return {blocked:true,reason:'enemy-blockade',viaPortal:!!context?.viaPortal};
+        }
+      }
       if(isSafeTrackTile(player.color,pos.idx,rules)) return {captured:[]};
       const captured=[]; for(const [c,n] of enemyEntries){ for(let i=0;i<n;i++) captured.push({color:c}); }
       return {captured};
@@ -958,6 +991,7 @@
   }
   const App = {
     state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
+    _lastWarningsSignature:'',
     geom:{ track:[], home:{}, bases:{}, runway:{}, finishedSlots:{} },
     runSoon(callback){
       if(typeof callback!=='function') return;
@@ -1231,11 +1265,11 @@
       const orderEl=this.$?.specialsOrder;
       if(orderEl){
         const labels={
-          'own-color-jump':'跳格',
-          'flight':'飛行',
-          'portal':'傳送門',
-          'power-up':'增益',
-          'trap':'陷阱'
+          'own-color-jump':'⤴️ 自色跳格',
+          'flight':'🪂 虛線飛行',
+          'portal':'🌀 傳送門',
+          'power-up':'🎲 增壓',
+          'trap':'⚠️ 亂流'
         };
         const order=(window.GameRules?.SPECIAL_RESOLUTION_ORDER||[]).map(key=>labels[key]||key).join(' → ');
         orderEl.textContent=order;
@@ -1559,11 +1593,13 @@
     },
     refreshLegalMoves(){
       if(!this.state.rules){ this.state.legalMoves=[]; this.highlightMovables(); return; }
+      let warnings=[];
       if(this.state.dice==null){
         this.state.legalMoves=[];
       }else{
         const snapshot={players:this.state.players,pieces:this.state.pieces,turn:this.state.turn};
         this.state.legalMoves=window.GameRules.generateLegalMoves(snapshot,this.state.rules,this.state.dice);
+        warnings=Array.isArray(window.GameRules.generateLegalMoves.lastWarnings)?window.GameRules.generateLegalMoves.lastWarnings:[];
       }
       if(this.state.bonusSelecting && this.state.pendingBonus && Array.isArray(this.state.legalMoves)){
         const pb=this.state.pendingBonus;
@@ -1573,6 +1609,7 @@
           return true;
         });
       }
+      this.handleMoveWarnings(warnings);
       this.highlightMovables();
     },
     handleNoMoves(player){
@@ -1585,6 +1622,25 @@
         this._noMoveTimer=null;
         this.advanceTurn();
       },1200);
+    },
+    handleMoveWarnings(warnings){
+      const list=Array.isArray(warnings)?warnings:[];
+      if(list.length===0){
+        this._lastWarningsSignature='';
+        return;
+      }
+      const signature=list.map(w=>`${w.type||'?'}:${w.playerId||''}:${w.idx??''}:${w.source||''}`).join('|');
+      if(this._lastWarningsSignature===signature) return;
+      this._lastWarningsSignature=signature;
+      list.forEach(warning=>{
+        if(warning.type==='portal-blocked'){
+          const player=this.state.players.find(p=>p.id===warning.playerId);
+          const name=this.formatPlayerName(player,{includeDifficulty:true});
+          const tileLabel=(typeof warning.idx==='number')?`格 ${warning.idx}`:'該格';
+          this.showToast(`🌀 傳送門落點被堵住（${tileLabel}）`,1800);
+          this.log(`${name} 起飛受阻：傳送門落點被敵方堵路（${tileLabel}）`);
+        }
+      });
     },
     updateTurnUI(){
       const player=this.currentPlayer();
@@ -1659,6 +1715,7 @@
       const specials=Object.assign({},specialsRaw);
       if(typeof specials.portalLimit!=='number' || Number.isNaN(specials.portalLimit)) specials.portalLimit=1;
       if(typeof specials.enabled!=='boolean') specials.enabled=true;
+      if(specials.portalBypassBlockade===undefined || specials.portalBypassBlockade===null) specials.portalBypassBlockade=true;
       this.state.rules.specials=specials;
     },
     populateRulesForm(rules){
@@ -1716,6 +1773,7 @@
       setCheckbox('startTileSafe', safeRules.start!==false);
       const specialsRules=rules.specials||{};
       setCheckbox('specialsEnabled', specialsRules.enabled!==false);
+      setCheckbox('portalBypassBlockade', specialsRules.portalBypassBlockade!==false);
       const timer=Math.max(0, parseInt(rules.turnTimerSec??0,10)||0);
       setNumber('turnTimerSec', timer);
       setSelect('animSpeed', rules.animSpeed||'normal');
@@ -1729,7 +1787,7 @@
         ownColorJump:{enabled:chk('ownColorJumpEnabled'),steps:num('ownColorJumpSteps',4)}, dashedFlight:{enabled:chk('dashedFlightEnabled'),captureOnLanding:chk('captureOnFlight')},
         homeLaneExactEntry:chk('homeLaneExactEntry'), finishExact:(f.querySelector('[name="finishExact"]')?.value)||'exact',
         safeTiles:{start:chk('startTileSafe'),list:[]},
-        specials:{enabled:chk('specialsEnabled'),portalLimit:1},
+        specials:{enabled:chk('specialsEnabled'),portalLimit:1,portalBypassBlockade:chk('portalBypassBlockade')},
         turnTimerSec:Math.max(0,num('turnTimerSec',0)),
         animSpeed:(()=>{ const raw=(f.querySelector('[name="animSpeed"]')?.value)||'normal'; return ['slow','normal','fast'].includes(raw)?raw:'normal'; })(),
         undoEnabled:chk('undoEnabled')
@@ -2705,6 +2763,53 @@
         const mv=(this.state.legalMoves||[]).find(m=>m.pieceIndex===idx);
         if(mv) this.applyMove(mv,'mouse');
       };
+      const safeOffsets=new Map();
+      const computeSafeOffsets=(count)=>{
+        const preset={
+          2:[{x:-7,y:0},{x:7,y:0}],
+          3:[{x:0,y:-8},{x:-7,y:6},{x:7,y:6}],
+          4:[{x:-7,y:-7},{x:7,y:-7},{x:-7,y:7},{x:7,y:7}]
+        };
+        if(preset[count]) return preset[count];
+        const radius=8;
+        return Array.from({length:count},(_,i)=>{
+          const angle=-Math.PI/2 + (2*Math.PI*i/count);
+          return {x:Math.cos(angle)*radius,y:Math.sin(angle)*radius};
+        });
+      };
+      const board=window.GameRules?.BOARD;
+      const safeRules=this.state.rules?.safeTiles||{};
+      const safeList=new Set(safeRules.list||[]);
+      const includeStart=safeRules.start!==false;
+      const startSet=new Set(Object.values(board?.track?.startIndex||{}).filter(idx=>typeof idx==='number'));
+      const isSafeIdx=(idx)=>{
+        if(typeof idx!=='number') return false;
+        if(safeList.has(idx)) return true;
+        return includeStart && startSet.has(idx);
+      };
+      const safeGroups=new Map();
+      this.state.players.forEach(player=>{
+        const pieces=this.state.pieces[player.id]||[];
+        pieces.forEach((pc,idx)=>{
+          if(pc?.pos?.kind==='track' && isSafeIdx(pc.pos.idx)){
+            const key=pc.pos.idx;
+            if(!safeGroups.has(key)) safeGroups.set(key,[]);
+            safeGroups.get(key).push({playerId:player.id,color:player.color,pieceIndex:idx});
+          }
+        });
+      });
+      safeGroups.forEach((entries)=>{
+        const distinctColors=new Set(entries.map(entry=>entry.color).filter(Boolean));
+        if(distinctColors.size<=1) return;
+        entries.sort((a,b)=>{
+          if(a.color===b.color) return a.pieceIndex-b.pieceIndex;
+          return String(a.color||'').localeCompare(String(b.color||''));
+        });
+        const offsets=computeSafeOffsets(entries.length);
+        entries.forEach((entry,idx)=>{
+          safeOffsets.set(`${entry.playerId}:${entry.pieceIndex}`,offsets[idx]||{x:0,y:0});
+        });
+      });
       const active=[];
       const finished=[];
       for(const p of this.state.players){
@@ -2715,7 +2820,10 @@
           const wrapper=document.createElementNS(SVG_NS,'g');
           wrapper.dataset.player=p.id;
           wrapper.dataset.index=String(idx);
-          wrapper.setAttribute('transform',`translate(${xy.x},${xy.y})`);
+          const offset=safeOffsets.get(`${p.id}:${idx}`);
+          const tx=xy.x+(offset?.x||0);
+          const ty=xy.y+(offset?.y||0);
+          wrapper.setAttribute('transform',`translate(${tx},${ty})`);
           wrapper.style.cursor='pointer';
           if(this.state.disabledColors && this.state.disabledColors[p.id]){
             wrapper.setAttribute('data-disabled','true');
