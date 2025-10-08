@@ -41,6 +41,8 @@
     .muted{color:var(--muted)}
     .list{display:flex;flex-direction:column;gap:8px;align-items:stretch}
     #movables .btn{width:100%;justify-content:flex-start;text-align:left;padding:8px 12px;font-size:.85rem;line-height:1.3;white-space:normal}
+    #movables[data-selection-disabled="true"] .btn{cursor:not-allowed;opacity:.7}
+    #movables .selection-notice{margin:0;font-size:.82rem;color:var(--muted)}
     .pill{border:1px solid #334155;border-radius:999px;padding:6px 10px}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     .board-wrap{position:relative;aspect-ratio:1/1;background:#0a0a0a;border-radius:16px;border:1px solid #1f2937;display:grid;place-items:center;overflow:hidden}
@@ -2605,6 +2607,38 @@
       const host=this.$.movables; host.innerHTML='';
       const player=this.currentPlayer(); if(!player) return;
 
+      const mousePermitted=this.isInteractionPermitted('mouse');
+      const keyboardPermitted=this.isInteractionPermitted('keyboard');
+      if(mousePermitted){ host.removeAttribute('data-selection-disabled'); }
+      else { host.setAttribute('data-selection-disabled','true'); }
+
+      const selectionNotice=(()=>{
+        if(mousePermitted) return '';
+        if(this.isInputLocked()) return '提示顯示中，請稍候…';
+        if(this.state.disabledColors && this.state.disabledColors[player.id]){
+          return `${this.formatPlayerName(player,{includeDifficulty:true})} 已完成行動`;
+        }
+        if(this.isAI(player)){
+          return `${this.formatPlayerName(player,{includeDifficulty:true})} 由 AI 操作中`;
+        }
+        if(!keyboardPermitted) return '目前無法選擇棋子';
+        const mode=this.state.settings?.keyboardMode||'shared';
+        const playerIndex=this.state.players.findIndex(p=>p.id===player.id);
+        if(mode==='dual'){
+          if(playerIndex===0) return '此回合需使用鍵盤（P1：用 1–4 選棋）';
+          if(playerIndex===1) return '此回合需使用鍵盤（P2：用 7–0 選棋）';
+          return '此回合需使用鍵盤選擇棋子';
+        }
+        if(mode==='custom') return '此回合需依自訂鍵位選擇棋子';
+        return '此回合需使用鍵盤選擇棋子（用 1–4 選棋）';
+      })();
+      if(selectionNotice){
+        const notice=document.createElement('p');
+        notice.className='selection-notice muted';
+        notice.textContent=selectionNotice;
+        host.appendChild(notice);
+      }
+
       const moves=this.state.legalMoves||[];
       const preserveLastPath = (!this.state.bonusSelecting && this.state.dice==null && (!moves || moves.length===0) && Array.isArray(this.state.lastMoveSummary?.path) && this.state.lastMoveSummary.path.length>0);
       if(preserveLastPath) this.previewLastMove(); else this.clearGhostPath();
@@ -2614,6 +2648,12 @@
         if(!byPiece.has(m.pieceIndex)) byPiece.set(m.pieceIndex,[]);
         byPiece.get(m.pieceIndex).push(m);
       });
+
+      const isMouseLikeEvent=(evt)=>{
+        if(!evt) return true;
+        if(typeof evt.detail!=='number') return true;
+        return evt.detail!==0;
+      };
 
       const pcs=this.state.pieces[player.id]||[];
       pcs.forEach((pc,idx)=>{
@@ -2628,11 +2668,18 @@
         ring.setAttribute('stroke',hasMove?'var(--accent)':'transparent');
         ring.setAttribute('stroke-width',hasMove?'2':'0');
         if(hasMove){
-          ring.style.cursor='pointer';
-          ring.addEventListener('click',()=>{
+          ring.style.cursor=mousePermitted?'pointer':'default';
+          ring.addEventListener('click',(evt)=>{
+            const usingMouse=isMouseLikeEvent(evt);
+            if(usingMouse && !mousePermitted){
+              evt.preventDefault();
+              this.handleBlockedInteraction('mouse');
+              return;
+            }
+            const source=usingMouse?'mouse':'keyboard';
             const options=byPiece.get(idx)||[];
             if(options.length===1){
-              this.applyMove(options[0],'mouse');
+              this.applyMove(options[0],source);
             }else if(options.length>1){
               const firstBtn=host.querySelector(`button[data-piece="${idx}"]`);
               if(firstBtn){
@@ -2674,7 +2721,16 @@
             btn.dataset.option=String(optIdx);
             const prefix=movesForPiece.length>1?`${idx+1} 號棋（選項 ${optIdx+1}）`:`${idx+1} 號棋`;
             btn.textContent=`${prefix}：${this.describeMove(mv)}`;
-            btn.addEventListener('click',()=>this.applyMove(mv,'mouse'));
+            btn.addEventListener('click',(evt)=>{
+              const usingMouse=isMouseLikeEvent(evt);
+              if(usingMouse && !mousePermitted){
+                evt.preventDefault();
+                this.handleBlockedInteraction('mouse');
+                return;
+              }
+              const source=usingMouse?'mouse':'keyboard';
+              this.applyMove(mv,source);
+            });
             btn.addEventListener('pointerenter',()=>this.previewMove(mv,player.color));
             btn.addEventListener('pointerleave',()=>{
               const fallback=movesForPiece?.[0]||defaultMove;
@@ -2690,7 +2746,8 @@
         }
       });
 
-      if(host.childElementCount===0){
+      const hasButtons=host.querySelector('button')!=null;
+      if(!hasButtons){
         const span=document.createElement('span');
         span.className='muted';
         span.textContent='沒有可移動棋子';
