@@ -3153,103 +3153,313 @@
       const moves=this.state.legalMoves||[];
       if(moves.length===0) return null;
       const rules=this.state.rules||window.GameRules.DEFAULT_RULES;
+      const BOARD=window.GameRules.BOARD;
+      const trackLength=BOARD.track.length;
       const distToFinish=(color,pos)=>{
-        const BOARD=window.GameRules.BOARD;
-        const L=BOARD.track.length;
+        if(!pos||typeof pos!=='object') return 0;
         const entry=BOARD.homeLane.entryIndex[color];
         const homeLen=BOARD.homeLane.length;
         if(pos.kind==='finished') return 0;
-        if(pos.kind==='home') return (homeLen-1-pos.idx);
+        if(pos.kind==='home') return Math.max(0,(homeLen-1-pos.idx));
         if(pos.kind==='track'){
-          const dToEntry=((entry-pos.idx)%L+L)%L;
+          const dToEntry=((entry-pos.idx)%trackLength+trackLength)%trackLength;
           const enterHomeStep=(dToEntry===0)?1:0;
           return dToEntry+enterHomeStep+(homeLen-1);
         }
         if(pos.kind==='base'){
           const start=BOARD.track.startIndex[color];
           const startDist=distToFinish(color,window.GameRules.Pos.track(start));
-          return startDist+1; // include the takeoff step from base to the start tile
+          return startDist+1;
         }
         return 0;
       };
       const isSafeTile=(color,idx)=>{
-        const start=window.GameRules.BOARD.track.startIndex[color];
+        if(idx==null) return false;
+        const start=BOARD.track.startIndex[color];
         if(rules.safeTiles?.start && idx===start) return true;
-        return (rules.safeTiles?.list||[]).includes(idx);
+        const safeList=new Set(rules.safeTiles?.list||[]);
+        const extra=window.GameRules.BOARD?.special?.safeTiles?.extra||[];
+        extra.forEach(v=>safeList.add(v));
+        return safeList.has(idx);
       };
-      const captureRiskProb=(color,idx)=>{
-        if(isSafeTile(color,idx)) return 0;
-        let hits=0;
-        const L=window.GameRules.BOARD.track.length;
-        for(const opp of this.state.players){
-          if(opp.id===player.id) continue;
-          const oppPieces=this.state.pieces[opp.id]||[];
-          for(const pc of oppPieces){
-            if(pc.pos.kind!=='track') continue;
-            const d=((idx-pc.pos.idx)%L+L)%L;
-            if(d>=1&&d<=6) hits+=1;
-          }
+      const weightsProfile={
+        easy:{
+          opening:{W_out:6,W_safe:4,W_eat:7,W_risk:2,W_progress:3,W_cluster:1,W_endfit:2,W_tempo:1},
+          midgame:{W_out:3,W_safe:5,W_eat:7,W_risk:3,W_progress:4,W_cluster:1,W_endfit:2,W_tempo:2},
+          endgame:{W_out:0,W_safe:4,W_eat:6,W_risk:2,W_progress:6,W_cluster:0,W_endfit:5,W_tempo:2}
+        },
+        normal:{
+          opening:{W_out:7,W_safe:5,W_eat:8,W_risk:3,W_progress:4,W_cluster:2,W_endfit:2,W_tempo:3},
+          midgame:{W_out:2,W_safe:6,W_eat:9,W_risk:5,W_progress:5,W_cluster:2,W_endfit:3,W_tempo:4},
+          endgame:{W_out:0,W_safe:4,W_eat:7,W_risk:3,W_progress:7,W_cluster:1,W_endfit:7,W_tempo:3}
+        },
+        hard:{
+          opening:{W_out:6,W_safe:6,W_eat:10,W_risk:7,W_progress:5,W_cluster:2,W_endfit:3,W_tempo:6},
+          midgame:{W_out:1,W_safe:7,W_eat:10,W_risk:8,W_progress:6,W_cluster:3,W_endfit:4,W_tempo:7},
+          endgame:{W_out:0,W_safe:5,W_eat:8,W_risk:5,W_progress:9,W_cluster:1,W_endfit:9,W_tempo:6}
         }
-        return Math.min(1,hits/6);
       };
       const myPieces=this.state.pieces[player.id]||[];
-      const scored=moves.map(m=>{
-        const beforePos=myPieces[m.pieceIndex]?.pos||window.GameRules.Pos.base();
-        const before=distToFinish(player.color,beforePos);
-        const after=distToFinish(player.color,m.to);
-        const progress=Math.max(0,before-after);
-        // Weight raw progress so that large advances matter, but a single-step takeoff
-        // no longer eclipses finish/capture bonuses now that base distance is normalized.
-        const PROGRESS_WEIGHT=60;
-        let score=progress*PROGRESS_WEIGHT;
-        const cap=(m.capture&&(m.capture.captured||[]).length)||0;
-        score+=cap*1000;
-        if(m.to.kind==='finished') score+=900;
-        if((m.events||[]).some(e=>e.type==='enter-home')) score+=400;
-        if((m.events||[]).some(e=>e.type==='jump')) score+=140;
-        if((m.events||[]).some(e=>e.type==='flight')) score+=90;
-        if(m.kind==='takeoff') score+=80;
-        if(m.to.kind==='track' && isSafeTile(player.color,m.to.idx)) score+=60;
-        const specials=[...(m.events||[]),...(m.effects||[])];
-        if(specials.some(e=>e?.type==='trap')) score-=500;
-        if(specials.some(e=>e?.type==='power-up')) score+=150;
-        const beforeRisk=(beforePos.kind==='track')?captureRiskProb(player.color,beforePos.idx):0;
-        const afterRisk=(m.to.kind==='track')?captureRiskProb(player.color,m.to.idx):0;
-        if(m.to.kind==='track'){
-          score-=afterRisk*700;
-        }
-        return {move:m,score,before,after,progress,beforeRisk,afterRisk};
+      const clonePos=(pos)=>this.clonePosition(pos);
+      const myPositions=myPieces.map(pc=>clonePos(pc?.pos));
+      const buildTrackCounts=(positions)=>{
+        const counts=Array(trackLength).fill(0);
+        positions.forEach(pos=>{ if(pos?.kind==='track'){ counts[pos.idx]=(counts[pos.idx]||0)+1; } });
+        return counts;
+      };
+      const myTrackCounts=buildTrackCounts(myPositions);
+      const opponents=this.state.players.filter(p=>p.id!==player.id);
+      const opponentPieces=[];
+      opponents.forEach(opp=>{
+        (this.state.pieces[opp.id]||[]).forEach(pc=>{ if(pc?.pos) opponentPieces.push({color:opp.color,pos:clonePos(pc.pos)}); });
       });
-      if(difficulty==='hard'){
+      const threatDetailAt=(idx,{stackSize=1}={})=>{
+        if(idx==null) return {prob:0,faces:new Set(),intensity:0};
+        if(isSafeTile(player.color,idx)) return {prob:0,faces:new Set(),intensity:0};
+        if(stackSize>=2 && rules.blockadePassThrough===false) return {prob:0,faces:new Set(),intensity:0,blockade:true};
+        const faces=new Set();
+        let intensity=0;
+        opponentPieces.forEach(entry=>{
+          const pos=entry.pos;
+          if(!pos || pos.kind!=='track') return;
+          const d=((idx-pos.idx)%trackLength+trackLength)%trackLength;
+          if(d>=1 && d<=6){
+            faces.add(d);
+            intensity+=1;
+          }
+        });
+        return {prob:faces.size/6,faces,intensity};
+      };
+      const computeExposureSum=(positions,counts)=>{
+        const seen=new Set();
+        let total=0;
+        positions.forEach(pos=>{
+          if(!pos || pos.kind!=='track') return;
+          if(seen.has(pos.idx)) return;
+          seen.add(pos.idx);
+          const stackSize=counts[pos.idx]||0;
+          const detail=threatDetailAt(pos.idx,{stackSize});
+          total+=detail.prob;
+        });
+        return total;
+      };
+      const determinePhase=()=>{
+        const totalPieces=Math.max(myPieces.length, window.GameRules?.BOARD?.bases?.perPlayer||4);
+        let finished=0; let outCount=0; let distSum=0;
+        myPositions.forEach(pos=>{
+          if(!pos) return;
+          if(pos.kind==='finished') finished+=1;
+          if(pos.kind!=='base') outCount+=1;
+          distSum+=distToFinish(player.color,pos);
+        });
+        if(finished>=Math.max(1,totalPieces-1) || distSum<=totalPieces*6) return 'endgame';
+        if(outCount>=Math.max(2,Math.ceil(totalPieces/2)) || distSum<=totalPieces*20) return 'midgame';
+        return 'opening';
+      };
+      const phase=determinePhase();
+      const weights=(weightsProfile[difficulty]&&weightsProfile[difficulty][phase])||weightsProfile.normal.midgame;
+      const baseExposure=computeExposureSum(myPositions,myTrackCounts);
+      const SCALE={out:12,safe:10,eat:20,progress:6,cluster:5,endfit:9,tempo:8,riskPenalty:14,riskRelief:8};
+      const movingSetFromMove=(move)=>{
+        const indices=Array.isArray(move.stack)?move.stack.slice():[move.pieceIndex];
+        return new Set(indices);
+      };
+      const projectAfterState=(move)=>{
+        const positions=myPositions.map(pos=>clonePos(pos));
+        const movingSet=movingSetFromMove(move);
+        movingSet.forEach(idx=>{ positions[idx]=clonePos(move.to); });
+        const counts=buildTrackCounts(positions);
+        return {positions,counts,movingSet};
+      };
+      const computeClusterValue=(targetPos,positions,movingSet)=>{
+        if(!targetPos || targetPos.kind!=='track') return 0;
+        const idx=targetPos.idx;
+        const range=3;
+        let total=0;
+        positions.forEach((pos,idx2)=>{
+          if(!pos || pos.kind!=='track') return;
+          if(movingSet && movingSet.has(idx2)) return;
+          const diff=((pos.idx-idx)%trackLength+trackLength)%trackLength;
+          const wrap=Math.min(diff,trackLength-diff);
+          if(wrap===0) total+=1;
+          else if(wrap<=range) total+=0.5;
+        });
+        return total;
+      };
+      const eventScore=(move)=>{
+        const events=[...(move.events||[])];
+        const effects=[...(move.effects||[])];
+        let score=0;
+        events.forEach(ev=>{
+          if(ev.type==='jump') score+=(weights.W_progress+weights.W_tempo+6)*1.2;
+          else if(ev.type==='flight') score+=(weights.W_progress+weights.W_tempo+5);
+          else if(ev.type==='portal') score+=(weights.W_progress+4);
+          else if(ev.type==='enter-home') score+=(weights.W_endfit+weights.W_progress+6);
+          else if(ev.type==='finish') score+=(weights.W_endfit+weights.W_tempo+8)*1.4;
+          else if(ev.type==='power-up') score+=(weights.W_tempo+6)*1.1;
+          else if(ev.type==='trap') score-=(weights.W_risk+6)*1.4;
+        });
+        effects.forEach(effect=>{
+          if(effect.type==='power-up') score+=(weights.W_tempo+6)*1.2;
+          if(effect.type==='trap') score-=(weights.W_risk+6)*1.6;
+        });
+        return score;
+      };
+      const scored=moves.map(move=>{
+        const beforePos=myPositions[move.pieceIndex]||window.GameRules.Pos.base();
+        const beforeDist=distToFinish(player.color,beforePos);
+        const projection=projectAfterState(move);
+        const afterPos=move.to;
+        const afterDist=distToFinish(player.color,afterPos);
+        const progress=Math.max(0,beforeDist-afterDist);
+        const captureCount=(move.capture?.captured||[]).length;
+        const stackSizeAfter=(afterPos.kind==='track')?(projection.counts[afterPos.idx]||0):0;
+        const stackSizeBefore=(beforePos.kind==='track')?(myTrackCounts[beforePos.idx]||0):0;
+        const threatBefore=(beforePos.kind==='track')?threatDetailAt(beforePos.idx,{stackSize:Math.max(1,stackSizeBefore)}):{prob:0,faces:new Set(),intensity:0};
+        const threatAfter=(afterPos.kind==='track')?threatDetailAt(afterPos.idx,{stackSize:Math.max(1,stackSizeAfter)}):{prob:0,faces:new Set(),intensity:0};
+        const safeBefore=(beforePos.kind==='track')&&isSafeTile(player.color,beforePos.idx);
+        let safeValue=0;
+        let safePenalty=0;
+        if(afterPos.kind==='finished') safeValue=1.3;
+        else if(afterPos.kind==='home'){
+          const remain=Math.max(0,(BOARD.homeLane.length-1)-afterPos.idx);
+          safeValue=1+Math.max(0,1.2-remain*0.4);
+        }else if(afterPos.kind==='track'){
+          if(isSafeTile(player.color,afterPos.idx)) safeValue=1;
+          else if(stackSizeAfter>=2 && rules.blockadePassThrough===false) safeValue=0.8;
+          else if(captureCount>0) safeValue=0.4;
+        }
+        if(safeBefore && safeValue<0.8) safePenalty=1;
+        const movingSet=projection.movingSet;
+        const clusterBefore=computeClusterValue(beforePos,myPositions,movingSet)+Math.max(0,stackSizeBefore-movingSet.size);
+        const clusterAfter=computeClusterValue(afterPos,projection.positions,movingSet)+((afterPos.kind==='track')?Math.max(0,stackSizeAfter-movingSet.size):0);
+        const clusterDelta=clusterAfter-clusterBefore;
+        let endfit=0;
+        if(afterPos.kind==='finished') endfit=3;
+        else if(afterPos.kind==='home'){
+          const remain=Math.max(0,(BOARD.homeLane.length-1)-afterPos.idx);
+          if(remain===0) endfit=2.6;
+          else if(remain===1) endfit=2;
+          else if(remain===2) endfit=1.3;
+          else endfit=0.8;
+        }else if(afterDist<=2) endfit=1.6;
+        else if(afterDist<=4) endfit=1;
+        else if(afterDist<=6) endfit=0.6;
+        const tempoEvents=[...(move.events||[]),...(move.effects||[])];
+        let tempo=0;
+        if(captureCount>0) tempo+=1.1;
+        if(move.dice===6 && rules.extraTurnOnSix!==false) tempo+=0.6;
+        if(tempoEvents.some(ev=>ev.type==='power-up'&&ev.effect==='extra-roll')) tempo+=1.2;
+        if(tempoEvents.some(ev=>ev.type==='jump'||ev.type==='flight'||ev.type==='portal')) tempo+=0.2;
+        if(afterPos.kind==='finished') tempo+=0.4;
+        const outGain=(beforePos.kind==='base' && afterPos.kind!=='base')?1:0;
+        const heurScore=
+          weights.W_out*SCALE.out*outGain+
+          weights.W_safe*SCALE.safe*safeValue+
+          weights.W_eat*SCALE.eat*captureCount+
+          weights.W_progress*SCALE.progress*progress+
+          weights.W_cluster*SCALE.cluster*clusterDelta+
+          weights.W_endfit*SCALE.endfit*endfit+
+          weights.W_tempo*SCALE.tempo*tempo;
+        let score=heurScore;
+        score+=eventScore(move);
+        score-=weights.W_risk*SCALE.riskPenalty*threatAfter.prob;
+        score+=weights.W_risk*SCALE.riskRelief*Math.max(0,threatBefore.prob-threatAfter.prob);
+        if(safePenalty>0) score-=weights.W_risk*9*safePenalty;
+        const afterExposure=computeExposureSum(projection.positions,projection.counts);
+        const blockPressure=(()=>{
+          if(afterPos.kind!=='track') return 0;
+          if(projection.counts[afterPos.idx]<2 || rules.blockadePassThrough!==false) return 0;
+          let pressure=0;
+          opponentPieces.forEach(entry=>{
+            const pos=entry.pos;
+            if(!pos || pos.kind!=='track') return;
+            const behind=((afterPos.idx-pos.idx)%trackLength+trackLength)%trackLength;
+            if(behind>=1 && behind<=4) pressure+=1;
+          });
+          return pressure;
+        })();
+        return {
+          move,
+          score,
+          progress,
+          captureCount,
+          safeValue,
+          safePenalty,
+          threat:threatAfter,
+          threatBefore,
+          outGain,
+          clusterDelta,
+          endfit,
+          tempo,
+          afterExposure,
+          blockPressure
+        };
+      });
+      if(difficulty==='normal' || difficulty==='hard'){
         scored.forEach(entry=>{
-          const safetyGain=(entry.beforeRisk-entry.afterRisk);
-          entry.score+=safetyGain*400;
-          entry.score-=entry.afterRisk*200;
-          if(entry.move.to.kind==='finished') entry.score+=400;
-          if(entry.after<=2 && entry.after<entry.before) entry.score+=160;
-          if((entry.move.events||[]).some(e=>e.type==='enter-home')) entry.score+=120;
-          if(entry.move.capture?.captured?.length>0) entry.score+=180;
+          const expectedLoss=entry.threat.prob*(entry.progress*0.6+(entry.captureCount>0?2:1)+(entry.safeValue<0.6?2:0));
+          entry.score-=weights.W_risk*6*expectedLoss;
+        });
+      }
+      if(difficulty==='hard'){
+        const basePenaltyScale=weights.W_risk*18;
+        scored.forEach(entry=>{
+          const exposureDelta=entry.afterExposure-baseExposure;
+          if(exposureDelta>0) entry.score-=basePenaltyScale*exposureDelta;
+          else entry.score+=weights.W_risk*8*Math.abs(exposureDelta);
+          entry.score-=weights.W_risk*4*entry.threat.intensity;
+          if(entry.blockPressure>0) entry.score+=weights.W_tempo*4*entry.blockPressure;
+          if(entry.endfit>2.4) entry.score+=weights.W_endfit*6;
         });
       }
       const sorted=scored.slice().sort((a,b)=>{
+        if(!Number.isFinite(b.score) || !Number.isFinite(a.score)){
+          if(Number.isFinite(b.score)) return 1;
+          if(Number.isFinite(a.score)) return -1;
+          return 0;
+        }
         if(b.score!==a.score) return b.score-a.score;
-        const progDiff=(b.progress||0)-(a.progress||0);
-        if(progDiff!==0) return progDiff;
-        const capturesA=(a.move.capture?.captured||[]).length;
-        const capturesB=(b.move.capture?.captured||[]).length;
-        if(capturesB!==capturesA) return capturesB-capturesA;
-        return (a.before-a.after)-(b.before-b.after);
+        if(b.captureCount!==a.captureCount) return b.captureCount-a.captureCount;
+        if(b.progress!==a.progress) return b.progress-a.progress;
+        return (a.move.pieceIndex||0)-(b.move.pieceIndex||0);
       });
       if(sorted.length===0) return null;
-      if(difficulty==='easy' && sorted.length>1){
-        const weights=sorted.map((_,idx)=>idx+1);
-        const total=weights.reduce((sum,val)=>sum+val,0);
-        let threshold=Math.random()*total;
-        for(let i=sorted.length-1;i>=0;i--){
-          threshold-=weights[i];
-          if(threshold<=0) return sorted[i].move;
+      if(difficulty==='easy'){
+        const capturing=sorted.filter(entry=>entry.captureCount>0);
+        const safeMoves=sorted.filter(entry=>entry.safeValue>=1 || entry.move.to.kind!=='track');
+        const maxProgress=Math.max(0,...sorted.map(entry=>entry.progress||0));
+        let pool=null;
+        if(capturing.length>0) pool=capturing;
+        else if(safeMoves.length>0) pool=safeMoves;
+        else pool=sorted.filter(entry=>entry.progress===maxProgress);
+        if(pool.length===0) pool=sorted;
+        const topPool=pool.slice().sort((a,b)=>b.score-a.score);
+        if(topPool.length>1 && Math.random()<0.25){
+          const idx=Math.random()<0.5?0:1;
+          return topPool[Math.min(idx,topPool.length-1)].move;
         }
-        return sorted[sorted.length-1].move;
+        return topPool[0].move;
+      }
+      if(difficulty==='normal'){
+        const jitterThreshold=0.05+Math.random()*0.05;
+        if(sorted.length>1 && Math.random()<jitterThreshold){
+          const idx=Math.random()<0.5?0:1;
+          return sorted[Math.min(idx,sorted.length-1)].move;
+        }
+        return sorted[0].move;
+      }
+      if(difficulty==='hard'){
+        if(sorted.length>1){
+          const top=sorted[0];
+          const second=sorted[1];
+          const base=Math.max(1,Math.abs(top.score));
+          if(Math.abs(top.score-second.score)/base<0.01 && Math.random()<0.02){
+            const pick=Math.random()<0.5?0:1;
+            return sorted[pick].move;
+          }
+        }
+        return sorted[0].move;
       }
       return sorted[0].move;
     },
