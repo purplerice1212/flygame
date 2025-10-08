@@ -430,13 +430,11 @@
           {label:'C',from:49,to:13,color:'red'}
         ],
         ownColorJump: {
-          enabled:true, steps:4,
-          indices:{
-            red:[2,6,10,14,18,22,26,30,34,38,42,46,50],
-            blue:[15,19,23,27,31,35,39,43,47,51,3,7,11],
-            yellow:[28,32,36,40,44,48,0,4,8,12,16,20,24],
-            green:[41,45,49,1,5,9,13,17,21,25,29,33,37]
-          }
+          enabled:true,
+          steps:4,
+          interval:4,
+          firstOffset:2,
+          indices:{}
         },
         flightPaths:{ enabled:true, captureOnLanding:true, edges:{
           red:[{from:4,to:17},{from:8,to:21}],
@@ -447,6 +445,62 @@
       },
       bases:{ perPlayer:4 }
     };
+
+    function buildOwnColorJumpData(board){
+      const trackLength = Number(board?.track?.length) || 0;
+      if(trackLength <= 0){
+        return {
+          indices:Object.freeze({}),
+          lookupByColor:Object.freeze({}),
+          lookupByIndex:Object.freeze({})
+        };
+      }
+      const parseInteger = (value,fallback)=>{
+        const parsed = parseInt(value,10);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      };
+      const startIndex = board?.track?.startIndex || {};
+      const colorOrder = Array.isArray(board?.track?.orderClockwise) && board.track.orderClockwise.length
+        ? board.track.orderClockwise
+        : Object.keys(startIndex);
+      const jumpSpec = board?.special?.ownColorJump || {};
+      const rawOffset = parseInteger(jumpSpec.firstOffset, 2);
+      const rawInterval = parseInteger(jumpSpec.interval, 4);
+      const interval = Math.max(1, Math.abs(rawInterval));
+      const wrap = (value)=> ((value % trackLength) + trackLength) % trackLength;
+      const indicesResult = {};
+      const lookupByColor = {};
+      const lookupByIndex = {};
+      for(const color of colorOrder){
+        const start = startIndex[color];
+        if(typeof start !== 'number'){
+          indicesResult[color] = Object.freeze([]);
+          lookupByColor[color] = new Set();
+          continue;
+        }
+        const entries = [];
+        const visited = new Set();
+        let idx = wrap(start + rawOffset);
+        while(!visited.has(idx)){
+          entries.push(idx);
+          visited.add(idx);
+          lookupByIndex[idx] = color;
+          idx = wrap(idx + interval);
+        }
+        indicesResult[color] = Object.freeze(entries);
+        lookupByColor[color] = visited;
+      }
+      return {
+        indices:Object.freeze(indicesResult),
+        lookupByColor:Object.freeze(lookupByColor),
+        lookupByIndex:Object.freeze(lookupByIndex)
+      };
+    }
+
+    const OWN_COLOR_JUMP_DATA = buildOwnColorJumpData(BOARD);
+    BOARD.special.ownColorJump.indices = OWN_COLOR_JUMP_DATA.indices;
+    BOARD.special.ownColorJump.lookupByColor = OWN_COLOR_JUMP_DATA.lookupByColor;
+    BOARD.special.ownColorJump.lookupByIndex = OWN_COLOR_JUMP_DATA.lookupByIndex;
 
     function validateBoard(BOARD){
       const safe = new Set(BOARD.special?.safeTiles?.extra||[]);
@@ -541,7 +595,13 @@
       return dice===6;
     }
 
-    function isOwnJumpTile(color,idx){ return BOARD.special.ownColorJump.indices[color].includes(idx); }
+    function isOwnJumpTile(color,idx){
+      if(!color || typeof idx !== 'number') return false;
+      const lookup=BOARD.special?.ownColorJump?.lookupByColor?.[color];
+      if(lookup instanceof Set) return lookup.has(idx);
+      const list=BOARD.special?.ownColorJump?.indices?.[color];
+      return Array.isArray(list) ? list.includes(idx) : false;
+    }
     function flightTo(color,idx){ const e=BOARD.special.flightPaths.edges[color].find(e=>e.from===idx); return e?e.to:null; }
     function isStartTile(color,idx){ return idx===BOARD.track.startIndex[color]; }
     function isAnyStartTile(idx){ return Object.values(BOARD.track.startIndex).includes(idx); }
@@ -712,9 +772,25 @@
       const recordPath=options.recordPath===true;
       const pathRecord=recordPath?(options.pathRecord||[]):null;
       const recordPosition=(p)=>{ if(!recordPath || !pathRecord) return; pathRecord.push(clone(p)); };
-      if(rules.ownColorJump.enabled && current.kind==='track' && isOwnJumpTile(player.color,current.idx)){
-        const target = mod(current.idx + rules.ownColorJump.steps, BOARD.track.length);
-        current = Pos.track(target); events.push({type:'jump',from:pos.idx,to:target}); recordPosition(current);
+      // Ensure the own-colour jump runs at most once per landing resolution.
+      let jumpConsumed = options.jumpConsumed === true;
+      const playerColor = player?.color;
+      const ownJumpRule = rules?.ownColorJump || {};
+      const jumpEnabled = ownJumpRule.enabled !== false;
+      const jumpDistance = Math.max(1, parseInt(ownJumpRule.steps ?? 4,10) || 4);
+      if(
+        !jumpConsumed &&
+        jumpEnabled &&
+        current.kind==='track' &&
+        playerColor &&
+        isOwnJumpTile(playerColor,current.idx)
+      ){
+        const target = mod(current.idx + jumpDistance, BOARD.track.length);
+        current = Pos.track(target);
+        events.push({type:'jump',from:pos.idx,to:target,color:playerColor});
+        recordPosition(current);
+        jumpConsumed = true;
+        options.jumpConsumed = true;
       }
       const flightsEnabled = (BOARD.special.flightPaths?.enabled!==false);
       const flightRule = rules.dashedFlight||{};
@@ -2005,7 +2081,7 @@
         {label:'G',color:color('--green'),start:135,end:225}
       ];
       quadrants.forEach(q=>drawQuadrant(q.start,q.end,q.color,q.label));
-      const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJump=window.GameRules.BOARD.special.ownColorJump.indices;
+      const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJumpData=window.GameRules.BOARD.special.ownColorJump||{};
       const trackOffsetNormalized=(trackSegments[0].len/2)/trackPerimeter;
       const trackOffsetTiles=trackOffsetNormalized*total;
       const points=new Array(total);
@@ -2032,7 +2108,14 @@
         pattern.appendChild(el('circle',{cx:8,cy:8,r:1.2,fill:withAlpha(hex,0.28)}));
         defs.appendChild(pattern); jumpPatterns[col]=pattern; return pattern;
       };
-      const ownJumpLookup={}; Object.entries(ownJump).forEach(([col,arr])=>arr.forEach(idx=>{ ownJumpLookup[idx]=col; }));
+      const ownJumpLookup = ownJumpData.lookupByIndex || (()=>{
+        const fallback={};
+        Object.entries(ownJumpData.indices||{}).forEach(([col,arr])=>{
+          if(!Array.isArray(arr)) return;
+          arr.forEach(idx=>{ fallback[idx]=col; });
+        });
+        return fallback;
+      })();
       const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
       const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
       const tileSize=isCompact?40:44;
