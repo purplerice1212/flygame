@@ -44,6 +44,7 @@
     #movables[data-selection-disabled="true"] .btn{cursor:not-allowed;opacity:.7}
     #movables .selection-notice{margin:0;font-size:.82rem;color:var(--muted)}
     .pill{border:1px solid #334155;border-radius:999px;padding:6px 10px}
+    .pill[data-color-pill]{min-width:2.4rem;justify-content:center;font-weight:700;font-size:1rem}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     .board-wrap{position:relative;aspect-ratio:1/1;background:#0a0a0a;border-radius:16px;border:1px solid #1f2937;display:grid;place-items:center;overflow:hidden}
     #board-overlay{position:absolute;inset:0;padding:24px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:600;color:rgba(226,232,240,0.92);background:rgba(15,23,42,0.72);backdrop-filter:blur(2px);border-radius:inherit;opacity:0;pointer-events:none;transition:opacity .22s ease}
@@ -132,14 +133,37 @@
     .finish-order-list{margin:8px 0 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
     .finish-order-list li{line-height:1.4}
     body[data-view="lobby"] #view-game aside{opacity:.4;pointer-events:none}
-    #specials-legend{border:1px solid #1f2937;border-radius:12px;padding:12px;background:rgba(15,23,42,0.6)}
-    #specials-legend ul{margin:8px 0 0 0;padding-left:0;display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:#e2e8f0;list-style:none}
-    #specials-legend li{display:flex;align-items:center;gap:6px}
-    #specials-legend .legend-icon{display:inline-flex;width:1.4rem;align-items:center;justify-content:center;margin-right:4px}
-    #specials-legend .status-line{font-size:.85rem;margin:0;color:#a1a9ba}
+    #color-key{border:1px solid #1f2937;border-radius:12px;padding:12px;background:rgba(15,23,42,0.65)}
+    #color-key .color-key-list{margin:8px 0 0 0;padding-left:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px 12px;list-style:none;font-size:.85rem;color:#e2e8f0}
+    #color-key .color-key-item{display:flex;align-items:center;gap:8px}
+    .color-key-symbol{display:inline-flex;width:1.6rem;height:1.6rem;border-radius:10px;align-items:center;justify-content:center;font-weight:700;color:#0b0f14;border:1px solid rgba(15,23,42,0.5);background:rgba(148,163,184,0.12)}
+    .color-key-symbol[data-color="red"]{background:var(--red);}
+    .color-key-symbol[data-color="blue"]{background:var(--blue);}
+    .color-key-symbol[data-color="yellow"]{background:var(--yellow);color:#0f172a}
+    .color-key-symbol[data-color="green"]{background:var(--green);}
+    #specials-legend{border:1px solid #1f2937;border-radius:12px;padding:12px;background:rgba(9,13,22,0.78)}
+    #specials-legend .legend-group + .legend-group{margin-top:12px}
+    #specials-legend h4{margin:0;font-size:.9rem;color:#cbd5f5}
+    #specials-legend .legend-list{margin:8px 0 0 0;padding-left:0;display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:#e2e8f0;list-style:none}
+    #specials-legend .legend-list li{display:flex;align-items:center;gap:8px}
+    #specials-legend .legend-icon{display:inline-flex;min-width:1.6rem;height:1.6rem;align-items:center;justify-content:center;font-weight:700;color:#e2e8f0;background:rgba(148,163,184,0.14);border-radius:8px;border:1px solid rgba(148,163,184,0.25)}
+    #specials-legend .legend-icon-start{background:rgba(34,211,238,0.16);color:#38bdf8;border-color:rgba(56,189,248,0.4);padding:0 .4rem;font-size:.7rem;letter-spacing:.08em}
+    #specials-legend .legend-icon-direction{background:rgba(255,255,255,0.14);color:#f8fafc}
+    #specials-legend .legend-icon-safe{background:rgba(190,227,248,0.24);color:#e0f2fe}
+    #specials-legend .status-line{font-size:.85rem;margin:12px 0 0;color:#a1a9ba}
+    #specials-legend .legend-note{font-size:.78rem;margin:6px 0 0;color:#94a3b8}
     #specials-legend[data-disabled="true"]{opacity:.5}
     #specials-legend[data-disabled="true"] [data-specials-status]{color:#f87171}
     #specials-legend[data-disabled="false"] [data-specials-status]{color:#34d399}
+    body[data-theme="light"] #color-key{background:rgba(226,232,240,0.8);border-color:#cbd5f5}
+    body[data-theme="light"] #specials-legend{background:rgba(226,232,240,0.82);border-color:#cbd5f5}
+    body[data-theme="light"] #specials-legend .legend-icon{background:rgba(148,163,184,0.2);border-color:rgba(148,163,184,0.35);color:#0f172a}
+    body[data-theme="light"] #specials-legend .legend-icon-direction{background:rgba(15,23,42,0.08);color:#0f172a}
+    body[data-theme="light"] #specials-legend .legend-icon-safe{background:rgba(59,130,246,0.15);color:#1d4ed8}
+    body[data-theme="light"] #specials-legend .legend-icon-start{color:#0f172a}
+    body[data-theme="high"] #color-key{background:rgba(15,23,42,0.92);border-color:#38bdf8}
+    body[data-theme="high"] #specials-legend{background:rgba(2,6,23,0.92);border-color:#38bdf8}
+    body[data-theme="high"] #specials-legend .legend-icon{background:rgba(148,163,184,0.28);border-color:#38bdf8;color:#f8fafc}
     body[data-view="game"] #view-game aside{opacity:1;pointer-events:auto}
     @media(prefers-reduced-motion:reduce){
       #turn-banner{transition:opacity .1s ease;transform:none}
@@ -330,17 +354,37 @@
           <button class="btn" id="btn-undo" type="button">Undo</button>
           <button class="btn" id="btn-restart" type="button">重開局</button>
         </div>
-        <section id="specials-legend" aria-label="特殊格圖例" style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">特殊格圖例</h3>
-          <p class="muted status-line">特殊格目前：<span data-specials-status>啟用</span></p>
-          <ul>
-            <li><span class="legend-icon">⤴️</span>自色跳格：落在自色入口時向前跳躍（預設 +4 格）</li>
-            <li><span class="legend-icon">🪂</span>虛線飛行：沿虛線飛至目的地，可依規則決定是否吃子</li>
-            <li><span class="legend-icon">🌀</span>傳送門：瞬移至配對點（每次落地最多 1 次）</li>
-            <li><span class="legend-icon">🎲</span>增壓：獲得額外擲骰或增益移動</li>
-            <li><span class="legend-icon">⚠️</span>亂流：下回合停飛一輪</li>
+        <section id="color-key" aria-label="顏色圖例" style="margin-top:12px">
+          <h3 class="section-title" style="font-size:1rem">起點圖例</h3>
+          <ul class="color-key-list">
+            <li class="color-key-item"><span class="color-key-symbol" data-color="red">▲</span>紅隊三角</li>
+            <li class="color-key-item"><span class="color-key-symbol" data-color="blue">■</span>藍隊方形</li>
+            <li class="color-key-item"><span class="color-key-symbol" data-color="yellow">◆</span>黃隊菱形</li>
+            <li class="color-key-item"><span class="color-key-symbol" data-color="green">✚</span>綠隊十字</li>
           </ul>
-          <p class="muted" style="margin-top:6px">結算順序（固定）：<span id="specials-order"></span></p>
+        </section>
+        <section id="specials-legend" aria-label="棋盤圖例" style="margin-top:12px">
+          <h3 class="section-title" style="font-size:1rem">棋盤圖例</h3>
+          <div class="legend-group">
+            <h4>路徑</h4>
+            <ul class="legend-list">
+              <li><span class="legend-icon legend-icon-start">START</span>起飛格：顏色＋形狀辨識，沿跑道出發</li>
+              <li><span class="legend-icon legend-icon-direction">➜</span>順時針箭頭：標示主要行進方向</li>
+              <li><span class="legend-icon legend-icon-safe">◎</span>雙圈：安全格，不可被吃</li>
+            </ul>
+          </div>
+          <div class="legend-group">
+            <h4>特殊格</h4>
+            <ul class="legend-list">
+              <li><span class="legend-icon">⤴️</span>自色跳格：落在自色入口時向前跳躍（預設 +4 格）</li>
+              <li><span class="legend-icon">🪂</span>虛線飛行：沿虛線飛至目的地，可依規則決定是否吃子</li>
+              <li><span class="legend-icon">🌀</span>傳送門：瞬移至配對點（每次落地最多 1 次）</li>
+              <li><span class="legend-icon">🎲</span>增壓：獲得額外擲骰機會</li>
+              <li><span class="legend-icon">⚠️</span>亂流：下回合停飛一輪</li>
+            </ul>
+          </div>
+          <p class="muted status-line">特殊格目前：<span data-specials-status>啟用</span></p>
+          <p class="muted legend-note">結算順序（固定）：<span id="specials-order"></span></p>
         </section>
       </aside>
     </section>
@@ -456,7 +500,7 @@
   // =========================== Rules Engine ============================
   (function(){
       const BOARD = {
-        boardSpecVersion: "skybound-variant-v2",
+        boardSpecVersion: "skybound-variant-v3",
       track: { length: 52, orderClockwise: ["red","blue","yellow","green"], startIndex: { red:0, blue:13, yellow:26, green:39 } },
       homeLane: { length: 6, entryIndex: { red:50, blue:11, yellow:24, green:37 } },
       special: {
@@ -466,20 +510,21 @@
         },
         powerTiles:[
           {idx:5,effect:'extra-roll',label:'🎲'},
-          {idx:18,effect:'advance-2',label:'+2'},
-          {idx:31,effect:'command-other',label:'⇄'},
-          {idx:44,effect:'advance-2',label:'+2'}
+          {idx:18,effect:'extra-roll',label:'🎲'},
+          {idx:31,effect:'extra-roll',label:'🎲'},
+          {idx:44,effect:'extra-roll',label:'🎲'}
         ],
         trapTiles:[
           {idx:12,effect:'skip-turn',label:'⚠'},
-          {idx:38,effect:'skip-turn',label:'⚠'}
+          {idx:25,effect:'skip-turn',label:'⚠'},
+          {idx:38,effect:'skip-turn',label:'⚠'},
+          {idx:51,effect:'skip-turn',label:'⚠'}
         ],
         portals:[
-          {label:'A',from:7,to:28},
-          {label:'A',from:28,to:7},
-          {label:'B',from:21,to:46},
-          {label:'B',from:46,to:21},
-          {label:'C',from:49,to:13,color:'red'}
+          {label:'A',from:7,to:33},
+          {label:'A',from:33,to:7},
+          {label:'B',from:20,to:46},
+          {label:'B',from:46,to:20}
         ],
         ownColorJump: {
           enabled:true,
@@ -577,6 +622,13 @@
     }
 
     validateBoard(BOARD);
+
+    const COLOR_MARKERS = Object.freeze({
+      red:{shape:'triangle',symbol:'▲',label:'紅'},
+      blue:{shape:'square',symbol:'■',label:'藍'},
+      yellow:{shape:'diamond',symbol:'◆',label:'黃'},
+      green:{shape:'cross',symbol:'✚',label:'綠'}
+    });
 
     const SPECIAL_BY_IDX = (()=>{
       const registry={};
@@ -930,7 +982,7 @@
       return {captured};
     }
 
-    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith, SPECIAL_RESOLUTION_ORDER, SPECIAL_BY_IDX };
+    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith, SPECIAL_RESOLUTION_ORDER, SPECIAL_BY_IDX, COLOR_MARKERS };
 
     // (Tests removed in production build)
   })();
@@ -941,7 +993,7 @@
   // =============================== App ================================
   const SVG_NS='http://www.w3.org/2000/svg';
   const SAVE_KEY='ac_save_v1';
-  const SAVE_VERSION='skybound-variant-v2';
+  const SAVE_VERSION='skybound-variant-v3';
   const $ = (selector)=>document.querySelector(selector);
   const supportsDialog = (()=>{
     try{
@@ -1222,11 +1274,16 @@
       const value=colorSelect.value||'';
       card.dataset.color=value;
       if(pill){
+        const markers=window.GameRules?.COLOR_MARKERS||{};
+        const marker=markers[value];
         const label=(colorSelect.options && colorSelect.selectedIndex>=0)?(colorSelect.options[colorSelect.selectedIndex]?.textContent||''):'●';
         const trimmed=(label||'').trim();
-        const displayLabel=trimmed.length?trimmed:'●';
+        const displayLabel=marker?.symbol || (trimmed.length?trimmed:'●');
         pill.textContent=displayLabel;
-        pill.setAttribute('aria-label',`顏色：${trimmed.length?trimmed:'未設定'}`);
+        const ariaLabel=marker?`${marker.label}隊（${displayLabel}）`:(trimmed.length?trimmed:'未設定');
+        pill.setAttribute('aria-label',`顏色：${ariaLabel}`);
+        if(marker?.shape){ pill.dataset.shape=marker.shape; pill.title=`${marker.label}隊`; }
+        else { pill.removeAttribute('data-shape'); pill.removeAttribute('title'); }
         if(value){
           pill.style.background=`var(--${value})`;
           pill.style.color='#0b0f14';
@@ -2105,11 +2162,17 @@
       defs.appendChild(glow);
       const css=getComputedStyle(document.documentElement);
       const color=(name)=>css.getPropertyValue(name).trim();
+      const ensureColor=(value,fallback)=>{ const trimmed=(value||'').trim(); return trimmed.length?trimmed:fallback; };
+      const colorMarkers=window.GameRules?.COLOR_MARKERS||{};
+      const markerForColor=(col)=>colorMarkers[col]||null;
+      const markerSymbol=(col)=>markerForColor(col)?.symbol||'●';
       const geom=this.geom={track:[],home:{},bases:{},runway:{},finishedSlots:{},baseCenters:{},runwayEntry:{}};
       const isCompact=window.matchMedia('(max-width: 959px)').matches;
       const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
       const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
       const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
+      const tileBaseFill=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.28);
+      const tileBorderColor=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.72);
       const rad=(deg)=>deg*Math.PI/180;
       const trackRadius=r-20;
       const STADIUM_W=780,STADIUM_H=560,STADIUM_R=120;
@@ -2168,12 +2231,21 @@
         return pts.join(' ');
       };
       const drawChevron=(group,x,y,a,size=10)=>{
-        const x1=x+Math.cos(a)*(size*1.2);
-        const y1=y+Math.sin(a)*(size*1.2);
-        group.appendChild(el('path',{
-          d:`M ${x1} ${y1} l ${-Math.cos(a+0.8)*size/1.5} ${-Math.sin(a+0.8)*size/1.5} M ${x1} ${y1} l ${-Math.cos(a-0.8)*size/1.5} ${-Math.sin(a-0.8)*size/1.5}`,
-          class:'tile-icon',stroke:'rgba(255,255,255,.28)','stroke-linecap':'round'
-        }));
+        const length=size*1.6;
+        const tail=size*0.9;
+        const tipX=x+Math.cos(a)*length;
+        const tipY=y+Math.sin(a)*length;
+        const tailX=x-Math.cos(a)*tail;
+        const tailY=y-Math.sin(a)*tail;
+        const normalX=-Math.sin(a);
+        const normalY=Math.cos(a);
+        const width=size*0.7;
+        const base1X=tailX+normalX*width;
+        const base1Y=tailY+normalY*width;
+        const base2X=tailX-normalX*width;
+        const base2Y=tailY-normalY*width;
+        group.appendChild(el('line',{x1:tailX,y1:tailY,x2:tipX,y2:tipY,stroke:'rgba(255,255,255,0.32)','stroke-width':2.2,'stroke-linecap':'round'}));
+        group.appendChild(el('polygon',{points:`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`,fill:'rgba(255,255,255,0.7)'}));
       };
       const drawQuadrant=(startDeg,endDeg,colorHex,label)=>{
         if(gBack){
@@ -2192,7 +2264,11 @@
         if(!info) return '';
         const colorLabel={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
         if(info.type==='safe') return '安全格：不可被吃';
-        if(info.type==='start') return `${colorLabel[info.color]||''} 起飛格`;
+        if(info.type==='start'){
+          const marker=markerForColor(info.color);
+          const suffix=marker?.symbol?`（${marker.symbol}）`:'';
+          return `${colorLabel[info.color]||''} 起飛格${suffix}`;
+        }
         if(info.type==='jump') return `${colorLabel[info.color]||''} 跳格入口`;
         if(info.type==='portal'){
           if(info.color) return `傳送門 ${info.label}（${colorLabel[info.color]||info.color} 專用）：${info.from} → ${info.to}`;
@@ -2211,7 +2287,7 @@
         return '';
       };
       if(gBack){
-        gBack.appendChild(el('circle',{cx,cy,r:r+60,fill:'#0a0a0a',stroke:withAlpha(color('--tile-grid'),0.6),'stroke-width':2,opacity:.5}));
+        gBack.appendChild(el('circle',{cx,cy,r:r+60,fill:withAlpha(ensureColor(color('--bg'),'#0a0a0a'),0.88),stroke:withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.4),'stroke-width':2}));
       }
       const quadrants=[
         {label:'R',color:color('--red'),start:-135,end:-45},
@@ -2267,9 +2343,9 @@
         const tangentDeg=tangent*180/Math.PI;
         const gTile=el('g',{transform:`translate(${x} ${y})`});
         const borderGroup=el('g',{transform:`rotate(${tangentDeg})`});
-        const baseAttrs={x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:'transparent',stroke:withAlpha(color('--tile-grid'),0.85),'stroke-width':2};
+        const baseAttrs={x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:tileBaseFill,stroke:tileBorderColor,'stroke-width':2};
         const jumpCol=ownJumpLookup[i];
-        if(jumpCol){ const hex=color(`--${jumpCol}`); baseAttrs.fill=mixWithWhite(hex,0.16); baseAttrs.stroke=withAlpha(hex,0.65); baseAttrs['stroke-width']=2.5; }
+        if(jumpCol){ const hex=ensureColor(color(`--${jumpCol}`),'#38bdf8'); baseAttrs.fill=mixWithWhite(hex,0.16); baseAttrs.stroke=withAlpha(hex,0.65); baseAttrs['stroke-width']=2.5; }
         borderGroup.appendChild(el('rect',baseAttrs));
         if(jumpCol){ ensureJumpPattern(jumpCol); borderGroup.appendChild(el('rect',{x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:`url(#jump-${jumpCol})`,opacity:0.45})); }
         gTile.appendChild(borderGroup);
@@ -2283,9 +2359,34 @@
           gIcon.appendChild(el('circle',{r:tileSize*0.38,class:'tile-icon tile-ring',stroke:'#BEE3F8'}));
         }
         if(startColor){
-          const hex=color(`--${startColor}`);
-          gIcon.appendChild(el('circle',{r:tileSize*0.32,class:'tile-icon',stroke:withAlpha(hex,0.6),fill:'none'}));
-          gIcon.appendChild(el('circle',{r:tileSize*0.18,fill:hex,stroke:'none'}));
+          const hex=ensureColor(color(`--${startColor}`),'#38bdf8');
+          gIcon.appendChild(el('circle',{r:tileSize*0.36,fill:withAlpha(hex,0.28),stroke:withAlpha(hex,0.85),'stroke-width':2.6}));
+          const marker=markerForColor(startColor);
+          const shapeSize=tileSize*0.34;
+          const strokeColor='#0b0f14';
+          if(marker?.shape==='triangle'){
+            gIcon.appendChild(el('path',{d:`M 0 ${-shapeSize*0.6} L ${shapeSize*0.52} ${shapeSize*0.6} L ${-shapeSize*0.52} ${shapeSize*0.6} Z`,fill:hex,stroke:strokeColor,'stroke-width':1.6,'stroke-linejoin':'round'}));
+          }else if(marker?.shape==='square'){
+            const side=shapeSize*0.9;
+            gIcon.appendChild(el('rect',{x:-side/2,y:-side/2,width:side,height:side,rx:4,fill:hex,stroke:strokeColor,'stroke-width':1.6}));
+          }else if(marker?.shape==='diamond'){
+            const diag=shapeSize*0.75;
+            gIcon.appendChild(el('path',{d:`M 0 ${-diag} L ${diag} 0 L 0 ${diag} L ${-diag} 0 Z`,fill:hex,stroke:strokeColor,'stroke-width':1.6,'stroke-linejoin':'round'}));
+          }else if(marker?.shape==='cross'){
+            const arm=shapeSize*0.28;
+            const half=shapeSize*0.72;
+            const points=[
+              {x:-arm,y:-half},{x:arm,y:-half},{x:arm,y:-arm},{x:half,y:-arm},
+              {x:half,y:arm},{x:arm,y:arm},{x:arm,y:half},{x:-arm,y:half},
+              {x:-arm,y:arm},{x:-half,y:arm},{x:-half,y:-arm},{x:-arm,y:-arm}
+            ];
+            const d=['M',`${points[0].x} ${points[0].y}`];
+            for(let idx=1;idx<points.length;idx++){ d.push('L',`${points[idx].x} ${points[idx].y}`); }
+            d.push('Z');
+            gIcon.appendChild(el('path',{d:d.join(' '),fill:hex,stroke:strokeColor,'stroke-width':1.6,'stroke-linejoin':'round'}));
+          }else{
+            gIcon.appendChild(el('circle',{r:shapeSize*0.48,fill:hex,stroke:strokeColor,'stroke-width':1.6}));
+          }
         }
         if(specialEntry?.type==='trap'){
           gIcon.appendChild(el('rect',{x:-8,y:-8,width:16,height:16,transform:'rotate(45)',fill:'rgba(255,95,109,.25)',stroke:'rgba(255,95,109,.9)',class:'tile-icon'}));
@@ -2293,7 +2394,7 @@
           gIcon.appendChild(el('circle',{r:5,fill:'rgba(255,255,255,.9)'}));
           gIcon.appendChild(el('circle',{r:tileSize*0.32,class:'tile-icon tile-ring',stroke:'rgba(255,255,255,.82)'}));
         }else if(specialEntry?.type==='portal'){
-          const accentBase=specialEntry.color?color(`--${specialEntry.color}`):color('--accent');
+          const accentBase=ensureColor(specialEntry.color?color(`--${specialEntry.color}`):color('--accent'),'#38bdf8');
           const stroke=withAlpha(accentBase,0.9);
           const fill=specialEntry.color?withAlpha(accentBase,0.24):'none';
           const textFill=specialEntry.color?'#0b0f14':'#fff';
@@ -2343,10 +2444,11 @@
           const points=Array.from(indices).map(idx=>geom.track[idx]).filter(Boolean);
           if(points.length>=2){
             const [p1,p2]=points;
-            const strokeColor=portalColor?withAlpha(color(`--${portalColor}`),0.85):color('--accent');
+            const portalBase=ensureColor(portalColor?color(`--${portalColor}`):color('--accent'),'#38bdf8');
+            const strokeColor=withAlpha(portalBase,0.85);
             portalLines.appendChild(el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:strokeColor,'stroke-dasharray':'8 6','stroke-width':2.6,'stroke-linecap':'round'}));
             const mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
-            const textColor=portalColor?strokeColor:color('--accent');
+            const textColor=portalColor?strokeColor:portalBase;
             const suffix=portalColor?`·${colorLabelMap[portalColor]||portalColor}`:'';
             portalLines.appendChild(el('text',{x:mid.x,y:mid.y-8,'text-anchor':'middle','font-size':'12','font-weight':'600','fill':textColor},[document.createTextNode(`🌀${label}${suffix}`)]));
           }
@@ -2382,7 +2484,8 @@
         const perp={x:-ny,y:nx}; const baseHalf=tileSize*0.24;
         const p1={x:baseCenter.x+perp.x*baseHalf,y:baseCenter.y+perp.y*baseHalf};
         const p2={x:baseCenter.x-perp.x*baseHalf,y:baseCenter.y-perp.y*baseHalf};
-        gSpecials.appendChild(el('polygon',{points:`${tip.x},${tip.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`,fill:withAlpha(color(`--${col}`),0.82)}));
+        const laneHex=ensureColor(color(`--${col}`),'#38bdf8');
+        gSpecials.appendChild(el('polygon',{points:`${tip.x},${tip.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`,fill:withAlpha(laneHex,0.82)}));
       }
       const flights=window.GameRules.BOARD.special.flightPaths.edges; const flightGroup=el('g',{});
       const bezierTangent=(t,p0,p1,p2)=>{ const mt=1-t; return{ x:2*mt*(p1.x-p0.x)+2*t*(p2.x-p1.x), y:2*mt*(p1.y-p0.y)+2*t*(p2.y-p1.y) }; };
@@ -2417,6 +2520,7 @@
         const step=(homeLen>1)?len/(homeLen-1):len;
         const perp={x:-uy,y:ux};
         geom.home[col]=[];
+        const laneHex=ensureColor(color(`--${col}`),'#38bdf8');
         for(let i=0;i<homeLen;i++){
           const dist=step*i;
           const x=lane.start.x+ux*dist; const y=lane.start.y+uy*dist;
@@ -2428,16 +2532,18 @@
           const p3={x:x-perp.x*halfWidth-ux*along,y:y-perp.y*halfWidth-uy*along};
           const p4={x:x+perp.x*halfWidth-ux*along,y:y+perp.y*halfWidth-uy*along};
           const isGoal=i===homeLen-1;
-          const fill=isGoal?withAlpha(color(`--${col}`),0.85):'rgba(148,163,184,0.18)';
-          const stroke=isGoal?withAlpha(color(`--${col}`),0.85):withAlpha(color(`--${col}`),0.4);
+          const fill=isGoal?withAlpha(laneHex,0.85):'rgba(148,163,184,0.18)';
+          const stroke=isGoal?withAlpha(laneHex,0.85):withAlpha(laneHex,0.4);
           gTiles.appendChild(el('polygon',{points:`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`,'stroke-width':2,'stroke-linejoin':'round',stroke,fill}));
         }
       });
+      const tileGridHex=ensureColor(color('--tile-grid'),'#1f2937');
       if(gGrid){
-        gGrid.appendChild(el('rect',{x:cx-60,y:cy-60,width:120,height:120,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:color('--tile-grid'),'stroke-width':2}));
+        gGrid.appendChild(el('rect',{x:cx-60,y:cy-60,width:120,height:120,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:tileGridHex,'stroke-width':2}));
         gGrid.appendChild(el('circle',{cx,cy,r:r+150,fill:'none',stroke:'#000','stroke-width':140,opacity:.35}));
       }
-      gSpecials.appendChild(el('polygon',{points:starPoints(cx,cy,70,28),fill:withAlpha(color('--accent'),0.16),stroke:color('--accent'),'stroke-width':2.4}));
+      const accentHex=ensureColor(color('--accent'),'#38bdf8');
+      gSpecials.appendChild(el('polygon',{points:starPoints(cx,cy,70,28),fill:withAlpha(accentHex,0.16),stroke:accentHex,'stroke-width':2.4}));
       const baseOffset=isCompact?300:350;
       const baseSize=isCompact?150:180;
       const slotOffset=isCompact?32:40;
@@ -2453,15 +2559,16 @@
         const x=cx+dx,y=cy+dy,w=baseSize,h=baseSize;
         geom.baseCenters[col]={x,y};
         geom.runwayEntry[col]=startIdx[col];
-        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:isCompact?18:22,fill:withAlpha(color(`--${col}`),0.18),stroke:withAlpha(color(`--${col}`),0.6),'stroke-width':2}));
+        const baseHex=ensureColor(color(`--${col}`),'#38bdf8');
+        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:isCompact?18:22,fill:withAlpha(baseHex,0.18),stroke:withAlpha(baseHex,0.6),'stroke-width':2}));
         const slots=[];
         for(let i=-1;i<=1;i+=2){
           for(let j=-1;j<=1;j+=2){
             const sx=x+i*slotOffset,sy=y+j*slotOffset;
             const label=slots.length+1;
             slots.push({x:sx,y:sy});
-            group.appendChild(el('circle',{cx:sx,cy:sy,r:slotRadius,fill:'rgba(255,255,255,.10)',stroke:withAlpha(color(`--${col}`),0.65),'stroke-width':2}));
-            group.appendChild(el('text',{x:sx,y:sy,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(color(`--${col}`),0.85),'font-weight':'600'},[document.createTextNode(String(label))]));
+            group.appendChild(el('circle',{cx:sx,cy:sy,r:slotRadius,fill:'rgba(255,255,255,.10)',stroke:withAlpha(baseHex,0.65),'stroke-width':2}));
+            group.appendChild(el('text',{x:sx,y:sy,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(baseHex,0.85),'font-weight':'600'},[document.createTextNode(String(label))]));
           }
         }
         geom.bases[col]=slots;
@@ -2495,10 +2602,20 @@
         runwayTiles.forEach(tile=>{
           const deg=tile.heading*180/Math.PI;
           const gTile=el('g',{transform:`translate(${tile.x},${tile.y}) rotate(${deg})`,'data-runway-col':col,'data-runway-slot':String(tile.slotIndex)});
-          const rect=el('rect',{x:-runwayTileSize/2,y:-runwayTileSize/2,width:runwayTileSize,height:runwayTileSize,rx:4,ry:4,class:`runway-tile runway-${col}`,'pointer-events':'none',stroke:withAlpha(color(`--${col}`),0.55)});
+          const rect=el('rect',{x:-runwayTileSize/2,y:-runwayTileSize/2,width:runwayTileSize,height:runwayTileSize,rx:4,ry:4,class:`runway-tile runway-${col}`,'pointer-events':'none',stroke:withAlpha(baseHex,0.55)});
           gTile.appendChild(rect);
           gRunways.appendChild(gTile);
         });
+        const hudStatic=this._hudLayers?.static;
+        if(hudStatic && runwayTiles.length>0){
+          const tip=runwayTiles[runwayTiles.length-1];
+          const heading=tip.heading;
+          const labelDistance=runwayTileSize*2.3;
+          const lx=tip.x-Math.cos(heading)*labelDistance;
+          const ly=tip.y-Math.sin(heading)*labelDistance;
+          const textColor=withAlpha(baseHex,0.95);
+          hudStatic.appendChild(el('text',{x:lx,y:ly,'text-anchor':'middle','font-size':11,'font-weight':'700','fill':textColor},[document.createTextNode(`${markerSymbol(col)} START`)]));
+        }
         if(gGrid) gGrid.appendChild(group);
       }
       gSpecials.appendChild(gRunways);
@@ -2839,6 +2956,7 @@
         });
       };
       const board=window.GameRules?.BOARD;
+      const markers=window.GameRules?.COLOR_MARKERS||{};
       const safeRules=this.state.rules?.safeTiles||{};
       const safeList=new Set(safeRules.list||[]);
       const includeStart=safeRules.start!==false;
@@ -2904,6 +3022,23 @@
           token.setAttribute('width',24);
           token.setAttribute('height',24);
           wrapper.appendChild(token);
+          const marker=markers[p.color];
+          if(marker?.symbol){
+            const glyph=document.createElementNS(SVG_NS,'text');
+            glyph.setAttribute('x',0);
+            glyph.setAttribute('y',-2);
+            glyph.setAttribute('text-anchor','middle');
+            glyph.setAttribute('dominant-baseline','middle');
+            glyph.setAttribute('font-size','11');
+            glyph.setAttribute('font-weight','700');
+            glyph.setAttribute('fill','#0b0f14');
+            glyph.setAttribute('stroke','rgba(255,255,255,0.68)');
+            glyph.setAttribute('stroke-width','0.6');
+            glyph.setAttribute('pointer-events','none');
+            glyph.setAttribute('aria-hidden','true');
+            glyph.textContent=marker.symbol;
+            wrapper.appendChild(glyph);
+          }
           const label=document.createElementNS(SVG_NS,'text');
           label.setAttribute('x',0);
           label.setAttribute('y',18);
