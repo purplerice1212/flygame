@@ -717,7 +717,14 @@
       const list=BOARD.special?.ownColorJump?.indices?.[color];
       return Array.isArray(list) ? list.includes(idx) : false;
     }
-    function flightTo(color,idx){ const e=BOARD.special.flightPaths.edges[color].find(e=>e.from===idx); return e?e.to:null; }
+    function flightTo(color,idx){
+      const edges=BOARD?.special?.flightPaths?.edges;
+      if(!edges) return null;
+      const list=edges[color];
+      if(!Array.isArray(list)) return null;
+      const entry=list.find(e=>e?.from===idx);
+      return entry?entry.to:null;
+    }
     function isStartTile(color,idx){ return idx===BOARD.track.startIndex[color]; }
     function isAnyStartTile(idx){ return Object.values(BOARD.track.startIndex).includes(idx); }
     function isSafeTrackTile(color,idx,rules){
