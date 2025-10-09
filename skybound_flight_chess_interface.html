@@ -241,6 +241,7 @@
                   <label><input type="radio" name="takeoff" value="even" checked> 擲偶數</label>
                   <label><input type="radio" name="takeoff" value="six"> 擲 6 才起飛</label>
                   <label><input type="radio" name="takeoff" value="fiveOrSix"> 擲 5 或 6</label>
+                  <label>起飛後前進格數 <input type="number" name="takeoffAdvanceSteps" min="0" max="12" value="1"></label>
                 </fieldset>
                 <fieldset>
                   <legend>連擲 / 懲罰</legend>
@@ -1851,6 +1852,7 @@
         if(hasValue){ select.value=raw; }
       };
       setRadio('takeoff', rules.takeoff||'even');
+      setNumber('takeoffAdvanceSteps', Math.max(0, parseInt(rules.takeoffAdvanceSteps ?? 1,10)||0));
       setCheckbox('extraTurnOnSix', rules.extraTurnOnSix!==false);
       setCheckbox('tripleSixPenalty', rules.tripleSixPenalty);
       setCheckbox('captureOnLand', rules.captureOnLand!==false);
@@ -1885,6 +1887,7 @@
         safeTiles:{start:chk('startTileSafe'),list:[]},
         specials:{enabled:chk('specialsEnabled'),portalLimit:1,portalBypassBlockade:chk('portalBypassBlockade')},
         turnTimerSec:Math.max(0,num('turnTimerSec',0)),
+        takeoffAdvanceSteps:Math.max(0,num('takeoffAdvanceSteps',1)),
         animSpeed:(()=>{ const raw=(f.querySelector('[name="animSpeed"]')?.value)||'normal'; return ['slow','normal','fast'].includes(raw)?raw:'normal'; })(),
         undoEnabled:chk('undoEnabled')
       };
