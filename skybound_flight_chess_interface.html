@@ -725,7 +725,6 @@
       const entry=list.find(e=>e?.from===idx);
       return entry?entry.to:null;
     }
-    function isStartTile(color,idx){ return idx===BOARD.track.startIndex[color]; }
     function isAnyStartTile(idx){ return Object.values(BOARD.track.startIndex).includes(idx); }
     function isSafeTrackTile(color,idx,rules){
       if(rules.safeTiles.start && isAnyStartTile(idx)) return true;
