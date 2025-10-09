@@ -1022,7 +1022,16 @@
     }catch(e){ return false; }
   })();
   const COLOR_LABELS={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
-  const isDocumentHidden = ()=> typeof document!=='undefined' && document.visibilityState==='hidden';
+  const isDocumentHidden = () => {
+    if (typeof document === 'undefined') return false;
+    const state = document.visibilityState;
+    if (typeof state === 'string') {
+      return state === 'hidden' || state === 'prerender';
+    }
+    if (typeof document.hidden === 'boolean') return document.hidden;
+    const prefixedHidden = document.webkitHidden ?? document.mozHidden ?? document.msHidden;
+    return typeof prefixedHidden === 'boolean' ? prefixedHidden : false;
+  };
   const openDialogSafe = (dialog)=>{
     if(!dialog) return;
     if(supportsDialog && typeof dialog.showModal==='function'){
