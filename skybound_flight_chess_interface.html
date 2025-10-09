@@ -2546,14 +2546,7 @@
           const k=0.32; const control={x:mid.x+normal.x*(segLen*k), y:mid.y+normal.y*(segLen*k)};
           const path=el('path',{d:`M ${p0.x} ${p0.y} Q ${control.x} ${control.y} ${p2.x} ${p2.y}`,stroke:strokeColor,'stroke-width':4,fill:'none',opacity:.78,'stroke-linecap':'round'});
           flightGroup.appendChild(path);
-          const tTip=0.985; const arrowTip={x:p2.x,y:p2.y};
-          const tan=bezierTangent(tTip,p0,control,p2); const tanLen=Math.hypot(tan.x,tan.y)||1; const tanUnit={x:tan.x/tanLen,y:tan.y/tanLen};
-          const arrowLen=12; const baseCenter={x:arrowTip.x-tanUnit.x*arrowLen,y:arrowTip.y-tanUnit.y*arrowLen};
-          const normalVec={x:-tanUnit.y,y:tanUnit.x}; const arrowWidth=12;
-          const c1={x:baseCenter.x+normalVec.x*(arrowWidth/2),y:baseCenter.y+normalVec.y*(arrowWidth/2)};
-          const c2={x:baseCenter.x-normalVec.x*(arrowWidth/2),y:baseCenter.y-normalVec.y*(arrowWidth/2)};
-          const arrow=el('polygon',{points:`${arrowTip.x},${arrowTip.y} ${c1.x},${c1.y} ${c2.x},${c2.y}`,fill:strokeColor,opacity:.9});
-          flightGroup.appendChild(arrow);
+          // Remove the arrowhead to keep the map visuals cleaner while retaining the flight path curve
         }
       }
       gSpecials.appendChild(flightGroup);
