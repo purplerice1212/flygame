@@ -2190,6 +2190,10 @@
       const markerSymbol=(col)=>markerForColor(col)?.symbol||'●';
       const geom=this.geom={track:[],home:{},bases:{},runway:{},finishedSlots:{},baseCenters:{},runwayEntry:{}};
       const isCompact=window.matchMedia('(max-width: 959px)').matches;
+      const tileSize=isCompact?40:44;
+      const hudSafetyMargin=isCompact?24:28;
+      const hudTrackOutset=tileSize/2+hudSafetyMargin;
+      const quadrantLabelOutset=hudTrackOutset+18;
       const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
       const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
       const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
@@ -2277,8 +2281,8 @@
         const hudStatic=this._hudLayers?.static;
         if(hudStatic){
           const mid=(startDeg+endDeg)/2;
-          const rx=cx+Math.cos(rad(mid))*(trackRadius+52);
-          const ry=cy+Math.sin(rad(mid))*(trackRadius+52);
+          const rx=cx+Math.cos(rad(mid))*(trackRadius+quadrantLabelOutset);
+          const ry=cy+Math.sin(rad(mid))*(trackRadius+quadrantLabelOutset);
           hudStatic.appendChild(el('text',{x:rx,y:ry,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(colorHex,0.38),'font-weight':'600'},[document.createTextNode(label)]));
         }
       };
@@ -2355,7 +2359,6 @@
       })();
       const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
       const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
-      const tileSize=isCompact?40:44;
       const chevronData=[];
       const cardinalTargets=[0,90,180,270];
       const cardinalBest=cardinalTargets.map(()=>({idx:-1,delta:Infinity}));
@@ -2443,7 +2446,7 @@
         if(hudStatic && i%5===0){
           const {nx,ny}=normalFromAngle(tangent);
           const outward={x:-nx,y:-ny};
-          const tickDist=tileSize*0.9;
+          const tickDist=hudTrackOutset;
           const tx=x+outward.x*tickDist;
           const ty=y+outward.y*tickDist;
           hudStatic.appendChild(el('text',{x:tx,y:ty,'text-anchor':'middle','dominant-baseline':'central','font-size':10,'fill':'rgba(255,255,255,.7)'},[document.createTextNode(String(i))]));
@@ -2632,7 +2635,7 @@
         if(hudStatic && runwayTiles.length>0){
           const tip=runwayTiles[runwayTiles.length-1];
           const heading=tip.heading;
-          const labelDistance=runwayTileSize*2.3;
+          const labelDistance=hudTrackOutset+runwayTileSize;
           const lx=tip.x-Math.cos(heading)*labelDistance;
           const ly=tip.y-Math.sin(heading)*labelDistance;
           const textColor=withAlpha(baseHex,0.95);
