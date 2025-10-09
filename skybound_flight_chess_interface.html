@@ -655,6 +655,7 @@
       homeLaneExactEntry:false, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
       specials:{enabled:true,portalLimit:1,portalBypassBlockade:true},
       turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
+      takeoffAdvanceSteps:1, // 0 = stop on the start tile, 1 = step one tile after entering
     };
 
     const mod = (n,m)=>((n%m)+m)%m;
@@ -771,8 +772,21 @@
             const enemyCount = Object.entries(tileOcc).filter(([c,n])=>c!==player.color).reduce((a,[,n])=>a+n,0);
             const allyCount = tileOcc[player.color]||0;
             if(!(allyCount>0 && !rules.stackEnabled) && !(enemyCount>=2 && !rules.blockadePassThrough)){
-              const events=[]; let final=Pos.track(destIdx);
-              const pathRecord=[clone(final)];
+              const events=[];
+              const stepCount = Math.max(0, parseInt(rules.takeoffAdvanceSteps ?? 0, 10) || 0);
+              let landingIdx = destIdx;
+              const pathRecord=[clone(Pos.track(landingIdx))];
+              for(let s=0; s<stepCount; s++){
+                const nextIdx = mod(landingIdx + 1, BOARD.track.length);
+                const nextOcc = occ.track[nextIdx] || {};
+                const enemyBlock = Object.entries(nextOcc).some(([c,n])=>c!==player.color && n>=2);
+                if(enemyBlock && !rules.blockadePassThrough){
+                  break;
+                }
+                landingIdx = nextIdx;
+                pathRecord.push(clone(Pos.track(landingIdx)));
+              }
+              let final=Pos.track(landingIdx);
               const special=resolveSpecialsAfterLanding(player,final,rules,occ,events,{recordPath:true,pathRecord});
               final=special.final; const eventLog=special.events; const effectsLog=special.effects||[];
               const capture=resolveCaptureOnTrack(player,final,rules,occ,{viaFlight:special.viaFlight,viaPortal:special.viaPortal});
