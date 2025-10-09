@@ -500,7 +500,7 @@
   // =========================== Rules Engine ============================
   (function(){
       const BOARD = {
-        boardSpecVersion: "skybound-variant-v3",
+        boardSpecVersion: "skybound-variant-v2",
       track: { length: 52, orderClockwise: ["red","blue","yellow","green"], startIndex: { red:0, blue:13, yellow:26, green:39 } },
       homeLane: { length: 6, entryIndex: { red:50, blue:11, yellow:24, green:37 } },
       special: {
@@ -993,7 +993,7 @@
   // =============================== App ================================
   const SVG_NS='http://www.w3.org/2000/svg';
   const SAVE_KEY='ac_save_v1';
-  const SAVE_VERSION='skybound-variant-v3';
+  const SAVE_VERSION='skybound-variant-v2';
   const $ = (selector)=>document.querySelector(selector);
   const supportsDialog = (()=>{
     try{
