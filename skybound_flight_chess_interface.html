@@ -1324,10 +1324,20 @@
       const type=(typeSelect.value||'human').toLowerCase();
       const isAI=type==='ai';
       difficultyRow.hidden=!isAI;
-      difficultyRow.setAttribute('aria-hidden',isAI?'false':'true');
-      if(isAI && difficultySelect){
-        const normalized=this.normalizeDifficulty(difficultySelect.value||'normal');
-        difficultySelect.value=normalized;
+      if(isAI){
+        difficultyRow.removeAttribute('aria-hidden');
+        if(difficultySelect){
+          difficultySelect.disabled=false;
+          difficultySelect.removeAttribute('aria-disabled');
+          const normalized=this.normalizeDifficulty(difficultySelect.value||'normal');
+          difficultySelect.value=normalized;
+        }
+      }else{
+        difficultyRow.setAttribute('aria-hidden','true');
+        if(difficultySelect){
+          difficultySelect.disabled=true;
+          difficultySelect.setAttribute('aria-disabled','true');
+        }
       }
     },
     refreshPlayerCardColors(){
