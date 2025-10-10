@@ -80,7 +80,22 @@
     .runway-yellow{stroke:var(--yellow)}
     .runway-green{stroke:var(--green)}
     .tile-ring{fill:none;stroke-dasharray:4 4}
-    .log{height:200px;overflow:auto;border-radius:12px;background:#0b0f14;border:1px solid #1f2937;padding:8px}
+    .log{height:200px;overflow:auto;border-radius:12px;background:var(--card);border:1px solid #1f2937;padding:8px;display:flex;flex-direction:column;gap:6px;font-size:.88rem;line-height:1.4;color:var(--fg)}
+    .log-entry{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:10px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.65);color:inherit;transition:background .18s ease,border-color .18s ease,color .18s ease}
+    .log-entry__time{font-variant-numeric:tabular-nums;font-weight:600;color:var(--muted)}
+    .log-entry__message{flex:1;min-width:0}
+    .log-entry[data-color]{background:var(--log-accent-soft,rgba(34,211,238,0.2));border-color:var(--log-accent,rgba(34,211,238,0.5));box-shadow:0 6px 14px rgba(15,23,42,0.25)}
+    .log-entry[data-color] .log-entry__time{color:var(--log-accent,var(--accent))}
+    .log-entry[data-tone="warning"]{background:rgba(190,120,32,0.24);border-color:rgba(234,179,8,0.6)}
+    .log-entry[data-tone="warning"] .log-entry__time{color:#facc15}
+    body[data-theme="light"] .log{background:rgba(226,232,240,0.85);border-color:#cbd5f5}
+    body[data-theme="light"] .log-entry{background:rgba(148,163,184,0.18);border-color:rgba(148,163,184,0.32)}
+    body[data-theme="light"] .log-entry[data-color]{background:var(--log-accent-soft,rgba(56,189,248,0.2));border-color:var(--log-accent,var(--accent));box-shadow:0 6px 16px rgba(15,23,42,0.12)}
+    body[data-theme="light"] .log-entry__time{color:#475569}
+    body[data-theme="high"] .log{background:rgba(2,6,23,0.92);border-color:var(--accent)}
+    body[data-theme="high"] .log-entry{background:rgba(15,23,42,0.7);border-color:rgba(148,163,184,0.42)}
+    body[data-theme="high"] .log-entry[data-color]{background:var(--log-accent-soft,rgba(251,191,36,0.26));border-color:var(--log-accent,var(--accent));box-shadow:0 10px 18px rgba(2,6,23,0.45)}
+    body[data-theme="high"] .log-entry__time{color:#f8fafc}
     fieldset{border:1px solid #334155;border-radius:12px;padding:12px}
     legend{padding:0 8px}
     label{display:flex;align-items:center;gap:8px}
@@ -97,8 +112,20 @@
     input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
     body[data-theme="light"] input[type="text"], body[data-theme="light"] select{background:#e2e8f0;color:#0f172a;border-color:#cbd5f5}
     body[data-theme="high"] input[type="text"], body[data-theme="high"] select{background:#0f172a;color:#f8fafc;border-color:#38bdf8}
-    #turn-banner{position:sticky;top:16px;z-index:20;display:block;padding:10px 18px;border-radius:999px;background:rgba(34,211,238,0.16);color:#0f172a;font-weight:600;border:1px solid rgba(34,211,238,0.35);box-shadow:0 8px 18px rgba(15,23,42,0.35);max-width:fit-content;margin:0 auto 12px auto;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .22s ease}
+    #turn-banner{position:sticky;top:16px;z-index:20;display:block;padding:10px 18px;border-radius:999px;background:var(--turn-accent-soft,rgba(34,211,238,0.2));color:var(--turn-accent-ink,#0f172a);font-weight:600;border:1px solid var(--turn-accent-border,rgba(34,211,238,0.45));box-shadow:0 10px 20px rgba(15,23,42,0.35);max-width:fit-content;margin:0 auto 12px auto;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .22s ease,color .18s ease,background .18s ease,border-color .18s ease}
+    #turn-banner[data-color]{color:var(--turn-accent,var(--accent));text-shadow:0 1px 2px rgba(2,6,23,0.45)}
     #turn-banner[data-show="true"]{opacity:1;transform:translateY(0)}
+    body[data-theme="light"] #turn-banner{background:var(--turn-accent-soft,rgba(56,189,248,0.18));color:var(--turn-accent-ink,#0f172a);border-color:var(--turn-accent-border,rgba(56,189,248,0.45));box-shadow:0 8px 18px rgba(148,163,184,0.35)}
+    body[data-theme="light"] #turn-banner[data-color]{color:var(--turn-accent,var(--accent));text-shadow:none}
+    body[data-theme="high"] #turn-banner{background:var(--turn-accent-soft,rgba(248,250,252,0.18));color:var(--turn-accent,var(--accent));border-color:var(--turn-accent-border,rgba(248,250,252,0.55));box-shadow:0 12px 24px rgba(2,6,23,0.55);text-shadow:0 1px 3px rgba(2,6,23,0.65)}
+    #turn-indicator{display:flex;align-items:center;gap:8px;color:var(--fg);transition:color .18s ease,text-shadow .18s ease}
+    #turn-indicator::before{content:"";width:.6rem;height:.6rem;border-radius:50%;background:rgba(148,163,184,0.6);box-shadow:0 0 0 2px rgba(15,23,42,0.45);transition:background .18s ease,box-shadow .18s ease;flex-shrink:0}
+    #turn-indicator[data-color]{color:var(--turn-indicator-accent,var(--accent));text-shadow:0 1px 2px rgba(2,6,23,0.45)}
+    #turn-indicator[data-color]::before{background:var(--turn-indicator-accent,var(--accent));box-shadow:0 0 0 3px rgba(15,23,42,0.6)}
+    body[data-theme="light"] #turn-indicator{color:#0f172a}
+    body[data-theme="light"] #turn-indicator[data-color]{text-shadow:none}
+    body[data-theme="high"] #turn-indicator{color:#f8fafc;text-shadow:0 1px 3px rgba(2,6,23,0.65)}
+    body[data-theme="high"] #turn-indicator[data-color]{color:var(--turn-indicator-accent,var(--accent))}
     #hint-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(15,23,42,0.68);border:1px solid #1f2937;display:flex;flex-direction:column;gap:8px}
     #hint-card h3{margin:0;font-size:.95rem;font-weight:600;color:#f1f5f9}
     #hint-card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:#cbd5f5;font-size:.9rem}
@@ -1635,11 +1662,25 @@
       const label=this.formatPlayerName(player,{includeDifficulty:true});
       return `${label} 的回合 — ${action}（${status}）`;
     },
-    showTurnPrompt(message,{duration=2200,force=false,lock=0}={}){
+    showTurnPrompt(message,{duration=2200,force=false,lock=0,color=null}={}){
       const host=this.$?.turnBanner; if(!host) return;
       if(!message){ host.dataset.show='false'; host.setAttribute('hidden',''); this._currentPrompt=''; return; }
       if(!force && this._currentPrompt===message) return;
       this._currentPrompt=message;
+      const accentColor=(typeof color==='string' && color.trim())?color.trim():'';
+      if(accentColor){
+        host.dataset.color=accentColor;
+        host.style.setProperty('--turn-accent',`var(--${accentColor}, var(--accent))`);
+        host.style.setProperty('--turn-accent-soft',`var(--${accentColor}-ghost, rgba(34,211,238,0.2))`);
+        host.style.setProperty('--turn-accent-border',`var(--${accentColor}, var(--accent))`);
+        host.style.setProperty('--turn-accent-ink',`var(--${accentColor}, var(--accent))`);
+      }else{
+        delete host.dataset.color;
+        host.style.setProperty('--turn-accent','var(--accent)');
+        host.style.setProperty('--turn-accent-soft','rgba(34,211,238,0.2)');
+        host.style.setProperty('--turn-accent-border','rgba(34,211,238,0.45)');
+        host.style.setProperty('--turn-accent-ink','var(--fg)');
+      }
       host.textContent=message;
       host.dataset.show='true';
       host.removeAttribute('hidden');
@@ -1654,14 +1695,33 @@
       const msg=this.buildTurnPrompt();
       const stage=this.state.bonusSelecting?'bonus':(this.state.dice==null?'roll':'move');
       const lock=force && stage==='roll'?320:0;
-      if(msg) this.showTurnPrompt(msg,{force,duration:2200,lock});
+      const current=this.currentPlayer();
+      const color=current?.color||null;
+      if(msg) this.showTurnPrompt(msg,{force,duration:2200,lock,color});
       else this.showTurnPrompt('',{force:true});
     },
-    log(message){
+    log(message,options={}){
       const host=this.$?.log; if(!host) return;
+      const opts=(options && typeof options==='object')?options:{};
+      const color=(typeof opts.color==='string' && opts.color.trim())?opts.color.trim():null;
+      const tone=(typeof opts.tone==='string' && opts.tone.trim())?opts.tone.trim():'';
       const entry=document.createElement('div');
+      entry.className='log-entry';
+      const accent=color?`var(--${color}, var(--accent))`:(tone==='warning'?'#f59e0b':'var(--accent)');
+      const accentSoft=color?`var(--${color}-ghost, rgba(34,211,238,0.2))`:(tone==='warning'?'rgba(249,115,22,0.22)':'rgba(34,211,238,0.2)');
+      entry.style.setProperty('--log-accent',accent);
+      entry.style.setProperty('--log-accent-soft',accentSoft);
+      if(color){ entry.dataset.color=color; } else { delete entry.dataset.color; }
+      if(tone && tone!=='default'){ entry.dataset.tone=tone; } else { delete entry.dataset.tone; }
+      const timeSpan=document.createElement('span');
+      timeSpan.className='log-entry__time';
       const time=new Date().toLocaleTimeString('zh-HK',{hour12:false});
-      entry.textContent=`[${time}] ${message}`;
+      timeSpan.textContent=`[${time}]`;
+      const messageSpan=document.createElement('span');
+      messageSpan.className='log-entry__message';
+      messageSpan.textContent=message;
+      entry.appendChild(timeSpan);
+      entry.appendChild(messageSpan);
       host.appendChild(entry);
       while(host.childElementCount>80){ host.removeChild(host.firstChild); }
       host.scrollTop=host.scrollHeight;
@@ -1698,7 +1758,8 @@
     handleTurnTimerExpired(){
       const player=this.currentPlayer();
       if(!player) return;
-      this.log(`${this.formatPlayerName(player,{includeDifficulty:true})} 超時！`);
+      const label=this.formatPlayerName(player,{includeDifficulty:true});
+      this.log(`${label} 超時！`,{color:player?.color||null});
       if(this.state.dice==null){
         this.rollDice('system');
       }else{
@@ -1730,7 +1791,7 @@
     handleNoMoves(player){
       this.clearTurnTimer();
       const name=this.formatPlayerName(player,{includeDifficulty:true});
-      this.showTurnPrompt(`${name} 無步可走`,{duration:1600,force:true,lock:400});
+      this.showTurnPrompt(`${name} 無步可走`,{duration:1600,force:true,lock:400,color:player?.color||null});
       this.renderHints();
       if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); }
       this._noMoveTimer=setTimeout(()=>{
@@ -1753,13 +1814,22 @@
           const name=this.formatPlayerName(player,{includeDifficulty:true});
           const tileLabel=(typeof warning.idx==='number')?`格 ${warning.idx}`:'該格';
           this.showToast(`🌀 傳送門落點被堵住（${tileLabel}）`,1800);
-          this.log(`${name} 起飛受阻：傳送門落點被敵方堵路（${tileLabel}）`);
+          this.log(`${name} 起飛受阻：傳送門落點被敵方堵路（${tileLabel}）`,{color:player?.color||null});
         }
       });
     },
     updateTurnUI(){
       const player=this.currentPlayer();
       this.$.turn.textContent=player?`當前：${this.formatPlayerName(player,{includeDifficulty:true})}`:'當前：—';
+      if(this.$?.turn){
+        if(player?.color){
+          this.$.turn.dataset.color=player.color;
+          this.$.turn.style.setProperty('--turn-indicator-accent',`var(--${player.color}, var(--accent))`);
+        }else{
+          delete this.$.turn.dataset.color;
+          this.$.turn.style.setProperty('--turn-indicator-accent','var(--accent)');
+        }
+      }
       this.setButtonDisabled(this.$.btnRoll,this.state.animating||this.state.dice!=null);
       const canUndo=!!(this.state.rules?.undoEnabled && Array.isArray(this.state.history) && this.state.history.length>0);
       this.setButtonDisabled(this.$.btnUndo,!canUndo);
@@ -1968,11 +2038,11 @@
       });
       if(duplicateColors.size>0){
         this.showToast('⚠️ 玩家顏色不可重複，請為每位玩家選擇不同顏色');
-        this.log('玩家顏色不可重複，請調整後再開始');
+        this.log('玩家顏色不可重複，請調整後再開始',{tone:'warning'});
         this.updateBoardOverlay();
         return;
       }
-      if(players.length<2){ this.showToast('請至少設定 2 位擁有不同顏色的玩家'); this.log('至少需要 2 位玩家'); this.updateBoardOverlay(); return; }
+      if(players.length<2){ this.showToast('請至少設定 2 位擁有不同顏色的玩家'); this.log('至少需要 2 位玩家',{tone:'warning'}); this.updateBoardOverlay(); return; }
       if(this.$?.dialogVictory) closeDialogSafe(this.$.dialogVictory);
       const celebration=document.getElementById('winner-celebration');
       if(celebration && celebration.parentNode) celebration.parentNode.removeChild(celebration);
@@ -2003,7 +2073,7 @@
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
       this.state.players.filter(p=>this.isAI(p)).forEach(p=>{
-        this.log(`${this.formatPlayerName(p,{includeDifficulty:true})} 將以此難度應戰`);
+        this.log(`${this.formatPlayerName(p,{includeDifficulty:true})} 將以此難度應戰`,{color:p?.color||null});
       });
       this.renderLastMove();
       this.clearGhostPath();
@@ -2057,7 +2127,7 @@
 
     restartGame(){
       if(!Array.isArray(this.state.players) || this.state.players.length<2){
-        this.log('未有進行中的對局');
+        this.log('未有進行中的對局',{tone:'warning'});
         return;
       }
       if(this.$?.dialogVictory) closeDialogSafe(this.$.dialogVictory);
@@ -2091,7 +2161,7 @@
       this.$.gHL.innerHTML='';
       this.$.log.innerHTML='';
       this.state.players.filter(p=>this.isAI(p)).forEach(p=>{
-        this.log(`${this.formatPlayerName(p,{includeDifficulty:true})} 將以此難度應戰`);
+        this.log(`${this.formatPlayerName(p,{includeDifficulty:true})} 將以此難度應戰`,{color:p?.color||null});
       });
       this.renderLastMove();
       this.clearGhostPath();
@@ -2114,16 +2184,17 @@
     rollDice(source='system'){
       if(this.state.view!=='game'){ return; }
       if(!this.isInteractionPermitted(source)){ this.handleBlockedInteraction(source); return; }
-      if(this.state.animating){ this.log('動畫進行中，稍候再擲'); return; }
+      if(this.state.animating){ this.log('動畫進行中，稍候再擲',{tone:'warning'}); return; }
       if(this.state.bonusSelecting){ this.showToast('先完成增益移動',1200); return; }
-      if(this.state.dice!=null){ this.log('本回合已擲骰'); return; }
+      if(this.state.dice!=null){ this.log('本回合已擲骰',{tone:'warning'}); return; }
       const player=this.currentPlayer();
       if(!player){ return; }
       const label=this.formatPlayerName(player,{includeDifficulty:true});
+      const color=player?.color||null;
       const skipRemaining=Math.max(0,this.state.skipTurns?.[player.id]||0);
       if(skipRemaining>0){
         this.state.skipTurns[player.id]=skipRemaining-1;
-        this.log(`${label} 因亂流停飛，跳過此回合擲骰`);
+        this.log(`${label} 因亂流停飛，跳過此回合擲骰`,{color});
         this.showToast(`${label} 暫停一回合`,1200);
         this.state.legalMoves=[];
         this.highlightMovables();
@@ -2135,14 +2206,14 @@
       const value=1+Math.floor(Math.random()*6);
       this.state.dice=value;
       this.$.diceOut.textContent=String(value);
-      this.log(`${label} 擲出 ${value}`);
+      this.log(`${label} 擲出 ${value}`,{color});
       const pid=player.id;
       const prev=this.state.consecutiveSixes?.[pid]||0;
       if(!this.state.consecutiveSixes) this.state.consecutiveSixes={};
       if(value===6){ this.state.consecutiveSixes[pid]=prev+1; }
       else { this.state.consecutiveSixes[pid]=0; }
       if(value===6 && this.state.rules?.tripleSixPenalty && this.state.consecutiveSixes[pid]>=3){
-        this.log(`${label} 連續三次擲出 6，被判失去回合`);
+        this.log(`${label} 連續三次擲出 6，被判失去回合`,{color});
         this.state.consecutiveSixes[pid]=0;
         this.state.dice=null;
         this.$.diceOut.textContent='–';
@@ -2159,7 +2230,7 @@
       this.saveGame();
       const moveCount=(this.state.legalMoves||[]).length;
       if(moveCount===0){
-        this.log(`${label} 無步可走`);
+        this.log(`${label} 無步可走`,{color});
         this.handleNoMoves(player);
         return;
       }
@@ -3164,6 +3235,7 @@
       const pid=this.state.turn;
       const player=this.currentPlayer();
       const playerLabel=this.formatPlayerName(player,{includeDifficulty:true});
+      const playerColor=player?.color||null;
       let movingIndices=Array.isArray(move.stack)?move.stack.slice():[move.pieceIndex];
       if(!movingIndices.includes(move.pieceIndex)) movingIndices.push(move.pieceIndex);
       movingIndices=Array.from(new Set(movingIndices)).sort((a,b)=>a-b);
@@ -3255,11 +3327,11 @@
             if(this.state.finishedSlots?.[info.opp.id]) delete this.state.finishedSlots[info.opp.id][info.pieceIndex];
             delete capturedPiece.finishedSlot;
           }
-          this.log(`${playerLabel} 吃子！把對手送回基地`);
+          this.log(`${playerLabel} 吃子！把對手送回基地`,{color:playerColor});
         }
 
         if(movingPieces.length>1){
-          this.log(`${playerLabel} 疊子合體移動（${movingPieces.length} 枚）`);
+          this.log(`${playerLabel} 疊子合體移動（${movingPieces.length} 枚）`,{color:playerColor});
         }
 
         const effectsOutcome=this.applySpecialEffects({player,move,leadIndex:leadEntry.idx});
@@ -3386,29 +3458,30 @@
       const outcome={extraTurn:false,pendingBonus:null};
       const events=Array.isArray(move?.events)?move.events:[];
       const playerLabel=this.formatPlayerName(player,{includeDifficulty:true});
+      const playerColor=player?.color||null;
       events.forEach(ev=>{
-        if(ev.type==='enter-home') this.log(`${playerLabel} 進入家路`);
-        else if(ev.type==='jump') this.log(`${playerLabel} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`);
-        else if(ev.type==='flight') this.log(`${playerLabel} 走飛線`);
-        else if(ev.type==='finish') this.log(`${playerLabel} 抵達終點！`);
+        if(ev.type==='enter-home') this.log(`${playerLabel} 進入家路`,{color:playerColor});
+        else if(ev.type==='jump') this.log(`${playerLabel} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`,{color:playerColor});
+        else if(ev.type==='flight') this.log(`${playerLabel} 走飛線`,{color:playerColor});
+        else if(ev.type==='finish') this.log(`${playerLabel} 抵達終點！`,{color:playerColor});
         else if(ev.type==='portal'){
           const label=ev.label?` ${ev.label}`:'';
-          this.log(`${playerLabel} 穿越傳送門${label}`);
+          this.log(`${playerLabel} 穿越傳送門${label}`,{color:playerColor});
           this.showToast(`🌀 傳送門${label||''}！`,1200);
         }
         else if(ev.type==='power-up'){
           if(ev.effect==='extra-roll'){
-            this.log(`${playerLabel} 拿到增擲機會！`);
+            this.log(`${playerLabel} 拿到增擲機會！`,{color:playerColor});
             this.showToast('🎲 加擲機會！',1400);
           }else if(ev.effect==='advance-2'){
-            this.log(`${playerLabel} 動力提升，準備再飛 2 格`);
+            this.log(`${playerLabel} 動力提升，準備再飛 2 格`,{color:playerColor});
           }else if(ev.effect==='command-other'){
-            this.log(`${playerLabel} 獲得指揮權，可讓另一架棋子前進 1 格`);
+            this.log(`${playerLabel} 獲得指揮權，可讓另一架棋子前進 1 格`,{color:playerColor});
           }
         }
         else if(ev.type==='trap'){
           if(ev.effect==='skip-turn'){
-            this.log(`${playerLabel} 遭遇亂流，下一回合將停飛`);
+            this.log(`${playerLabel} 遭遇亂流，下一回合將停飛`,{color:playerColor});
             this.showToast('⚠️ 亂流！下回合停飛',1600);
           }
         }
@@ -3451,7 +3524,8 @@
         const skipCount=Math.max(0,this.state.skipTurns?.[candidateId]||0);
         if(skipCount>0){
           this.state.skipTurns[candidateId]=skipCount-1;
-          this.log(`${candidate.name} 被亂流困住，跳過此回合`);
+          const candidateLabel=this.formatPlayerName(candidate,{includeDifficulty:true});
+          this.log(`${candidateLabel} 被亂流困住，跳過此回合`,{color:candidate?.color||null});
           this.showToast(`${candidate.name} 暫停一回合`,1200);
           attempts++; idx=(idx+1)%total; continue;
         }
@@ -3594,7 +3668,7 @@
     },
     continueFromSave(data=null){
       const payload=data||this.loadGame();
-      if(!payload){ this.log('冇儲存對局'); return; }
+      if(!payload){ this.log('冇儲存對局',{tone:'warning'}); return; }
       const snapshot=payload.state||payload;
       this.state.settings=Object.assign({keyboardMode:'shared',theme:'dark'}, snapshot.settings||{});
       this.applyTheme();
@@ -3653,9 +3727,9 @@
       if(this.state.history.length>20) this.state.history.shift();
     },
     undo(){
-      if(!this.state.rules?.undoEnabled){ this.log('未啟用 Undo'); return; }
+      if(!this.state.rules?.undoEnabled){ this.log('未啟用 Undo',{tone:'warning'}); return; }
       const snap=this.state.history?.pop?.();
-      if(!snap){ this.log('無可 Undo 嘅步'); return; }
+      if(!snap){ this.log('無可 Undo 嘅步',{tone:'warning'}); return; }
       this.state.players=snap.players; this.state.pieces=snap.pieces; this.state.turn=snap.turn; this.state.rules=snap.rules;
       this.normalizePlayerControls();
       this.updateControlAssignments();
@@ -4050,11 +4124,12 @@
         const mv=this.chooseAIMove({player:current,difficulty:diff});
         if(this.state.view!=='game') return;
         const label=this.formatPlayerName(current,{includeDifficulty:true});
+        const color=current?.color||null;
         if(mv){
-          this.log(`${label} 選擇：${this.describeMove(mv)}`);
+          this.log(`${label} 選擇：${this.describeMove(mv)}`,{color});
           this.applyMove(mv,'system');
         }else{
-          this.log(`${label} 無步可走`);
+          this.log(`${label} 無步可走`,{color});
           this.handleNoMoves(current);
         }
       },300);
