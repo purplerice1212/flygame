@@ -55,7 +55,7 @@
       svg.board{max-width:min(92vw,640px)}
     }
     .tile-icon{stroke-width:2;vector-effect:non-scaling-stroke}
-    .plane-token{stroke:#0b0f14;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;cursor:pointer;transition:transform .18s ease,filter .18s ease;fill:currentColor;}
+    .plane-token{stroke:#0b0f14;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;cursor:pointer;transition:transform .18s ease,filter .18s ease;fill:currentColor;paint-order:stroke;}
     .plane-red{color:var(--red)}
     .plane-blue{color:var(--blue)}
     .plane-yellow{color:var(--yellow)}
@@ -64,9 +64,16 @@
     g[data-finished="true"] .plane-token{opacity:.9;}
     g[data-disabled="true"] .plane-token{opacity:.4;}
     g[data-disabled="true"] text{opacity:.4;}
+    .plane-number{font-weight:700;letter-spacing:-0.02em;fill:#0b0f14;stroke:rgba(248,250,252,0.9);stroke-width:2.8;paint-order:stroke;text-shadow:0 1px 2px rgba(2,6,23,0.55);pointer-events:none;}
+    body[data-theme="light"] .plane-number{fill:#0f172a;stroke:rgba(226,232,240,0.92);text-shadow:0 1px 2px rgba(148,163,184,0.35);}
+    body[data-theme="high"] .plane-number{stroke:rgba(15,23,42,0.95);text-shadow:0 1px 3px rgba(15,23,42,0.65);}
+    g[data-disabled="true"] .plane-number{opacity:.65;}
+    .plane-marker{font-weight:700;letter-spacing:0.08em;fill:rgba(15,23,42,0.85);stroke:rgba(255,255,255,0.85);stroke-width:1.2;paint-order:stroke;text-transform:uppercase;pointer-events:none;}
+    body[data-theme="light"] .plane-marker{fill:#0f172a;stroke:rgba(226,232,240,0.92);}
+    body[data-theme="high"] .plane-marker{fill:rgba(248,250,252,0.92);stroke:rgba(2,6,23,0.9);}
     #layer-highlights{pointer-events:none;}
     #layer-highlights *{pointer-events:none;}
-    .finish-badge circle{fill:rgba(15,23,42,.82);stroke:rgba(255,255,255,.82);stroke-width:2}
+    .finish-badge{filter:drop-shadow(0 2px 6px rgba(2,6,23,0.5));}
     .runway-tile{fill:rgba(255,255,255,.08);stroke-width:2}
     .runway-red{stroke:var(--red)}
     .runway-blue{stroke:var(--blue)}
@@ -2210,13 +2217,23 @@
       svg.insertBefore(defs,svg.firstChild);
       const el=(n,a={},children=[])=>{ const node=document.createElementNS(SVG_NS,n); for(const [k,v] of Object.entries(a)){ node.setAttribute(k,String(v)); } children.forEach(child=>node.appendChild(child)); return node; };
       const planeShape=el('g',{id:'plane-shape','vector-effect':'non-scaling-stroke'},[
-        el('path',{d:'M0,-9 L6,0 L0,-3 L-6,0 Z',fill:'currentColor'}),
-        el('rect',{x:-4,y:0,width:8,height:6,rx:2,ry:2,fill:'currentColor'})
+        el('circle',{cx:0,cy:0,r:11,fill:'currentColor','fill-opacity':'0.16',stroke:'rgba(11,17,28,0.45)','stroke-width':'1.2'}),
+        el('path',{d:'M0,-9 L5,-2.4 L1.6,-2.4 L1.6,3.6 L3.6,6.6 L0,5 L-3.6,6.6 L-1.6,3.6 L-1.6,-2.4 L-5,-2.4 Z',fill:'currentColor'}),
+        el('path',{d:'M0,-9 L3.2,-3 L0,-3 L-3.2,-9 Z',fill:'currentColor'}),
+        el('path',{d:'M0,-1.4 L4.8,1.2 L0,2.6 L-4.8,1.2 Z',fill:'currentColor'}),
+        el('path',{d:'M0,3.2 L3.6,5.4 L0,4.9 L-3.6,5.4 Z',fill:'currentColor'}),
+        el('path',{d:'M0,-8 L0,5.2',stroke:'rgba(11,17,28,0.92)','stroke-width':'1.6','stroke-linecap':'round'}),
+        el('path',{d:'M-4.6,0.8 L4.6,0.8',stroke:'rgba(11,17,28,0.82)','stroke-width':'1.6','stroke-linecap':'round'}),
+        el('path',{d:'M-2.4,-3.8 L2.4,-3.8',stroke:'rgba(11,17,28,0.62)','stroke-width':'1.2','stroke-linecap':'round'}),
+        el('path',{d:'M-1.2,-6.6 Q0,-7.6 1.2,-6.6',stroke:'rgba(255,255,255,0.55)','stroke-width':'0.9','stroke-linecap':'round','fill':'none'})
       ]);
       defs.appendChild(planeShape);
       const finishBadge=el('g',{id:'finish-badge'},[
-        el('circle',{r:10,cx:0,cy:0,fill:'rgba(15,23,42,0.82)',stroke:'rgba(255,255,255,0.82)','stroke-width':2}),
-        el('path',{d:'M -4 0 L -1 3 L 5 -3',stroke:'#fff','stroke-width':2.2,fill:'none','stroke-linecap':'round','stroke-linejoin':'round'})
+        el('circle',{r:11,cx:0,cy:0,fill:'rgba(2,6,23,0.92)',stroke:'rgba(255,255,255,0.95)','stroke-width':2.4}),
+        el('path',{d:'M-3.5,5 L-3.5,-6',stroke:'rgba(148,163,184,0.95)','stroke-width':1.6,'stroke-linecap':'round'}),
+        el('path',{d:'M-3.5,-6 L4.6,-8 L4.6,0 L-3.5,-2 Z',fill:'rgba(248,250,252,0.94)',stroke:'rgba(15,23,42,0.45)','stroke-width':0.9,'stroke-linejoin':'round'}),
+        el('path',{d:'M-6.6,2.2 Q-2.2,6.4 2.6,3.4',stroke:'rgba(34,197,94,0.95)','stroke-width':1.8,'stroke-linecap':'round','fill':'none'}),
+        el('circle',{cx:-4.2,cy:-2.2,r:1.2,fill:'rgba(14,165,233,0.95)'})
       ]);
       defs.appendChild(finishBadge);
       const glow=el('filter',{id:'glow',x:'-50%',y:'-50%',width:'200%',height:'200%'});
@@ -3095,14 +3112,12 @@
           if(marker?.symbol){
             const glyph=document.createElementNS(SVG_NS,'text');
             glyph.setAttribute('x',0);
-            glyph.setAttribute('y',-2);
+            glyph.setAttribute('y',-7);
             glyph.setAttribute('text-anchor','middle');
             glyph.setAttribute('dominant-baseline','middle');
-            glyph.setAttribute('font-size','11');
+            glyph.setAttribute('font-size','8.5');
             glyph.setAttribute('font-weight','700');
-            glyph.setAttribute('fill','#0b0f14');
-            glyph.setAttribute('stroke','rgba(255,255,255,0.68)');
-            glyph.setAttribute('stroke-width','0.6');
+            glyph.setAttribute('class','plane-marker');
             glyph.setAttribute('pointer-events','none');
             glyph.setAttribute('aria-hidden','true');
             glyph.textContent=marker.symbol;
@@ -3110,12 +3125,12 @@
           }
           const label=document.createElementNS(SVG_NS,'text');
           label.setAttribute('x',0);
-          label.setAttribute('y',18);
+          label.setAttribute('y','0.6');
           label.setAttribute('text-anchor','middle');
           label.setAttribute('dominant-baseline','middle');
-          label.setAttribute('font-size','10');
-          label.setAttribute('fill','var(--fg)');
-          label.setAttribute('opacity','0.82');
+          label.setAttribute('font-size','11');
+          label.setAttribute('class','plane-number');
+          label.setAttribute('aria-hidden','true');
           label.textContent=String(idx+1);
           label.dataset.player=p.id;
           label.dataset.index=String(idx);
@@ -3127,7 +3142,7 @@
             badge.setAttributeNS('http://www.w3.org/1999/xlink','href','#finish-badge');
             badge.setAttribute('href','#finish-badge');
             badge.setAttribute('class','finish-badge');
-            badge.setAttribute('transform','translate(14,-14) scale(0.8)');
+            badge.setAttribute('transform','translate(16,-16) scale(0.92)');
             badge.setAttribute('pointer-events','none');
             wrapper.appendChild(badge);
             finished.push(wrapper);
