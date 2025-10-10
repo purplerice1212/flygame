@@ -269,7 +269,7 @@
               </label>
             </div>
             <details id="rules-advanced" open>
-              <summary>自訂規則（展開）</summary>
+              <summary>自訂規則（收合）</summary>
               <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:8px">
                 <fieldset>
                   <legend>起飛</legend>
@@ -1175,6 +1175,7 @@
       window.addEventListener('resize',()=>this.onResize());
     },
     cache(){
+      const rulesAdvanced=$('#rules-advanced');
       this.$={
         viewLobby:$('#view-lobby'), viewGame:$('#view-game'), playerCount:$('#playerCount'), playerList:$('#player-list'),
         formSetup:$('#form-setup'), btnQuick:$('#btn-quick'), btnStart:$('#btn-start'), btnLobby:$('#btn-lobby'), btnRoll:$('#btn-roll'),
@@ -1182,7 +1183,7 @@
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gBack:$('#layer-background'), gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gHud:$('#layer-hud'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
         boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order'),
-        theme:$('#theme'), rulesAdvanced:$('#rules-advanced'), lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last'),
+        theme:$('#theme'), rulesAdvanced, rulesAdvancedSummary:rulesAdvanced?rulesAdvanced.querySelector('summary'):null, lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last'),
         dialogVictory:$('#dialog-victory'), victoryWinnerName:document.querySelector('[data-winner-name]'), victoryWinnerColor:document.querySelector('[data-winner-color]'), victorySubtitle:document.querySelector('[data-victory-subtitle]'), victoryOrder:$('#victory-order'), victoryList:document.querySelector('[data-finish-order]')
       };
     },
@@ -1314,10 +1315,30 @@
         }
       }
       this.$.kbMode.addEventListener('change',e=>{ this.state.settings.keyboardMode=e.target.value; this.log(`鍵盤模式：${this.state.settings.keyboardMode}`); this.updateControlAssignments(); this.renderHints(); this.updateTurnPrompt(true); });
+      if(this.$.rulesAdvanced){
+        this.$.rulesAdvanced.addEventListener('toggle',()=>this.updateRulesAdvancedSummary());
+        this.updateRulesAdvancedSummary();
+      }
       if(!this._handleKeyDown){
         this._handleKeyDown=e=>this.onKey(e);
         window.addEventListener('keydown',this._handleKeyDown,true);
       }
+    },
+    updateRulesAdvancedSummary(){
+      const details=this.$?.rulesAdvanced;
+      if(!details) return;
+      let summary=this.$?.rulesAdvancedSummary;
+      if(!summary || !details.contains(summary)){
+        summary=details.querySelector('summary');
+        if(summary) this.$.rulesAdvancedSummary=summary;
+      }
+      if(!summary) return;
+      const isOpen=!!details.open;
+      const label=`自訂規則（${isOpen?'收合':'展開'}）`;
+      if(summary.textContent!==label){
+        summary.textContent=label;
+      }
+      summary.setAttribute('aria-expanded',isOpen?'true':'false');
     },
     updateViewVisibility(){
       const view=this.state.view||'lobby';
@@ -1914,7 +1935,10 @@
       this.updateSpecialsLegend();
       const custom=this.$?.formSetup?.querySelector('input[name="preset"][value="custom"]');
       if(custom) custom.checked=true;
-      if(this.$?.rulesAdvanced){ this.$.rulesAdvanced.open=true; }
+      if(this.$?.rulesAdvanced){
+        this.$.rulesAdvanced.open=true;
+        this.updateRulesAdvancedSummary();
+      }
     },
     applyBoardDefaultsToRules(){
       if(!this.state.rules) return;
@@ -2114,6 +2138,10 @@
     },
     toGame(){
       this.state.view='game';
+      if(this.$?.rulesAdvanced){
+        this.$.rulesAdvanced.open=false;
+        this.updateRulesAdvancedSummary();
+      }
       this.updateViewVisibility();
       this.updateBoardOverlay();
       this.updateSpecialsLegend();
