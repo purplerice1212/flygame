@@ -126,10 +126,10 @@
     body[data-theme="light"] #turn-indicator[data-color]{text-shadow:none}
     body[data-theme="high"] #turn-indicator{color:#f8fafc;text-shadow:0 1px 3px rgba(2,6,23,0.65)}
     body[data-theme="high"] #turn-indicator[data-color]{color:var(--turn-indicator-accent,var(--accent))}
-    #hint-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(15,23,42,0.68);border:1px solid #1f2937;display:flex;flex-direction:column;gap:8px}
+    #hint-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(15,23,42,0.68);border:1px solid #1f2937;display:flex;flex-direction:column;gap:8px;min-height:200px}
     #hint-card h3{margin:0;font-size:.95rem;font-weight:600;color:#f1f5f9}
-    #hint-card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:#cbd5f5;font-size:.9rem}
-    #hint-card .hint-meta{font-size:.8rem;color:var(--muted)}
+    #hint-card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:#cbd5f5;font-size:.9rem;flex:1}
+    #hint-card .hint-meta{font-size:.8rem;color:var(--muted);margin-top:auto}
     #toast-host{pointer-events:none;min-height:26px}
     #last-move-card{margin-top:12px;padding:12px;border-radius:14px;background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.35);display:flex;flex-direction:column;gap:8px;transition:background .18s ease,border-color .18s ease,color .18s ease}
     #last-move-card[data-empty="true"]{background:rgba(15,23,42,0.4);border-color:rgba(148,163,184,0.35)}
