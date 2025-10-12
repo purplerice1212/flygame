@@ -1109,7 +1109,7 @@
     });
   }
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, turbulenceRecoveries:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
     _lastWarningsSignature:'',
     _piecesObserver:null,
     geom:{ track:[], home:{}, bases:{}, runway:{}, finishedSlots:{} },
@@ -2076,6 +2076,7 @@
       this.state.players=players; this.normalizePlayerControls(); this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       this.state.consecutiveSixes={};
       this.state.skipTurns={};
+      this.state.turbulenceRecoveries={};
       this.state.bonusSelecting=false;
       this.state.pendingBonus=null;
       this.state.lastMoveSummary=null;
@@ -2092,6 +2093,7 @@
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
         this.state.consecutiveSixes[p.id]=0;
         this.state.skipTurns[p.id]=0;
+        this.state.turbulenceRecoveries[p.id]=0;
       }
       this.normalizePieces();
       this.state.legalMoves=[]; this.state.animating=false; this.state.dice=null;
@@ -2172,10 +2174,12 @@
       this.state.winner=null;
       this.state.disabledColors={};
       this.state.finishedSlots={};
+      this.state.turbulenceRecoveries={};
       for(const p of this.state.players){
         this.state.pieces[p.id]=Array.from({length:pieceCount},(_,idx)=>({pos:window.GameRules.Pos.base(idx), baseSlot:idx}));
         this.state.consecutiveSixes[p.id]=0;
         this.state.skipTurns[p.id]=0;
+        this.state.turbulenceRecoveries[p.id]=0;
       }
       this.normalizePieces();
       this.state.turn=this.state.players[0].id;
@@ -2251,6 +2255,21 @@
         this.updateTurnPrompt(true);
         this.advanceTurn();
         return;
+      }
+      const recoveringCount=Math.max(0,this.state.turbulenceRecoveries?.[pid]||0);
+      if(recoveringCount>0){
+        if(value%2!==0){
+          this.log(`${label} 仍受亂流影響，需要擲出雙數才可行動`,{color});
+          this.showToast('⚠️ 亂流：需擲出雙數',1600);
+          this.state.legalMoves=[];
+          this.highlightMovables();
+          this.renderHints();
+          this.saveGame();
+          this.handleNoMoves(player);
+          return;
+        }
+        this.state.turbulenceRecoveries[pid]=Math.max(0,recoveringCount-1);
+        this.log(`${label} 成功擺脫亂流`,{color});
       }
       this.refreshLegalMoves();
       this.renderHints();
@@ -3529,6 +3548,9 @@
           if(!this.state.skipTurns) this.state.skipTurns={};
           const currentSkip=Math.max(0,this.state.skipTurns[player.id]||0);
           this.state.skipTurns[player.id]=currentSkip+1;
+          if(!this.state.turbulenceRecoveries) this.state.turbulenceRecoveries={};
+          const currentRecovery=Math.max(0,this.state.turbulenceRecoveries[player.id]||0);
+          this.state.turbulenceRecoveries[player.id]=currentRecovery+1;
         }
       });
       return outcome;
@@ -3546,24 +3568,36 @@
       let idx=(currentIdx<0?0:(currentIdx+1)%total);
       let attempts=0;
       let target=null;
+      let skippedThisCycle=false;
       while(attempts<total){
         const candidate=playersList[idx];
-        if(!candidate){ attempts++; idx=(idx+1)%total; continue; }
+        attempts++;
+        idx=(idx+1)%total;
+        if(!candidate){ continue; }
         const candidateId=candidate.id;
         const skipCount=Math.max(0,this.state.skipTurns?.[candidateId]||0);
         if(skipCount>0){
+          skippedThisCycle=true;
           this.state.skipTurns[candidateId]=skipCount-1;
           const candidateLabel=this.formatPlayerName(candidate,{includeDifficulty:true});
           this.log(`${candidateLabel} 被亂流困住，跳過此回合`,{color:candidate?.color||null});
           this.showToast(`${candidate.name} 暫停一回合`,1200);
-          attempts++; idx=(idx+1)%total; continue;
+          continue;
         }
         const isFinished=this.state.finishOrder.includes(candidateId) || !!this.state.disabledColors[candidateId];
-        if(isFinished){ attempts++; idx=(idx+1)%total; continue; }
+        if(isFinished){ continue; }
         target=candidate;
         break;
       }
       if(!target){
+        const hasActivePlayers=playersList.some(p=>{
+          if(!p) return false;
+          const pid=p.id;
+          return !(this.state.finishOrder.includes(pid) || !!this.state.disabledColors[pid]);
+        });
+        if(skippedThisCycle && hasActivePlayers){
+          return this.advanceTurn();
+        }
         this.state.turn=null;
         this.state.dice=null;
         this.state.legalMoves=[];
@@ -3660,6 +3694,7 @@
         dice:this.state.dice,
         consecutiveSixes:this.state.consecutiveSixes,
         skipTurns:this.state.skipTurns,
+        turbulenceRecoveries:this.state.turbulenceRecoveries,
         bonusSelecting:this.state.bonusSelecting,
         pendingBonus:this.state.pendingBonus,
         settings:this.state.settings,
@@ -3714,6 +3749,8 @@
       this.state.consecutiveSixes=snapshot.consecutiveSixes||{};
       this.state.skipTurns=snapshot.skipTurns||{};
       this.state.players.forEach(p=>{ if(this.state.skipTurns[p.id]==null) this.state.skipTurns[p.id]=0; });
+      this.state.turbulenceRecoveries=snapshot.turbulenceRecoveries||{};
+      this.state.players.forEach(p=>{ if(this.state.turbulenceRecoveries[p.id]==null) this.state.turbulenceRecoveries[p.id]=0; });
       this.state.bonusSelecting=!!snapshot.bonusSelecting;
       this.state.pendingBonus=snapshot.pendingBonus||null;
       this.state.history=[];
@@ -3764,6 +3801,7 @@
       this.updateControlAssignments();
       this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
       this.state.skipTurns=snap.skipTurns||{};
+      this.state.turbulenceRecoveries=snap.turbulenceRecoveries||{};
       this.state.finishOrder=Array.isArray(snap.finishOrder)?snap.finishOrder.slice():[];
       this.state.winner=snap.winner||null;
       this.state.disabledColors=Object.assign({},snap.disabledColors||{});
@@ -3773,6 +3811,10 @@
       if(this.$.kbMode) this.$.kbMode.value=this.state.settings.keyboardMode||'shared';
       this.state.lastMoveSummary=snap.lastMoveSummary||null;
       this.normalizePieces();
+      this.state.players.forEach(p=>{
+        if(this.state.turbulenceRecoveries[p.id]==null) this.state.turbulenceRecoveries[p.id]=0;
+        if(this.state.skipTurns[p.id]==null) this.state.skipTurns[p.id]=0;
+      });
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
       this.clearTurnTimer();
       this.beginTurnTimer();
