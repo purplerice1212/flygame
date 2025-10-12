@@ -927,6 +927,12 @@
                 stepsTaken+=1;
                 overshoot-=1;
               }
+              if(idx!==last){
+                idx=last;
+                current=Pos.home(last);
+                recordPosition(current);
+                stepsTaken+=1;
+              }
               remaining=0;
             }
           }
