@@ -914,7 +914,8 @@
             if(rules.finishExact==='noMoveIfOver') return {legal:false,reason:'no-move-if-over',events};
             if(rules.finishExact==='bounceBack'){
               const last=laneLength-1;
-              let overshoot=remaining;
+              const overshootTotal=Math.max(0,remaining);
+              let overshoot=overshootTotal;
               let idx=current.idx;
               let direction=-1;
               while(overshoot>0){
@@ -928,6 +929,9 @@
                 overshoot-=1;
               }
               remaining=0;
+              if(overshootTotal>0){
+                events.push({type:'bounce-back',steps:overshootTotal});
+              }
             }
           }
         } else if(current.kind==='base' || current.kind==='finished'){
@@ -3104,6 +3108,7 @@
       if(Array.isArray(move.stack) && move.stack.length>1) parts.push(`疊子×${move.stack.length}`);
       if(move.events){
         if(move.events.some(ev=>ev.type==='enter-home')) parts.push('入家路');
+        if(move.events.some(ev=>ev.type==='bounce-back')) parts.push('折返');
         if(move.events.some(ev=>ev.type==='jump')) parts.push('跳格');
         if(move.events.some(ev=>ev.type==='flight')) parts.push('飛行');
         if(move.events.some(ev=>ev.type==='finish')) parts.push('終點');
@@ -3521,6 +3526,10 @@
         else if(ev.type==='jump') this.log(`${playerLabel} 觸發跳格 (+${this.state.rules?.ownColorJump?.steps||0})`,{color:playerColor});
         else if(ev.type==='flight') this.log(`${playerLabel} 走飛線`,{color:playerColor});
         else if(ev.type==='finish') this.log(`${playerLabel} 抵達終點！`,{color:playerColor});
+        else if(ev.type==='bounce-back'){
+          const steps=Math.max(1,ev.steps||0);
+          this.log(`${playerLabel} 在終點折返 ${steps} 步`,{color:playerColor});
+        }
         else if(ev.type==='portal'){
           const label=ev.label?` ${ev.label}`:'';
           this.log(`${playerLabel} 穿越傳送門${label}`,{color:playerColor});
