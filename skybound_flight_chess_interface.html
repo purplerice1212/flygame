@@ -414,7 +414,7 @@
             <ul class="legend-list">
               <li><span class="legend-icon">⤴️</span>自色跳格：落在自色入口時向前跳躍（預設 +4 格）</li>
               <li><span class="legend-icon">🪂</span>虛線飛行：沿虛線飛至目的地，可依規則決定是否吃子</li>
-              <li><span class="legend-icon">🌀</span>傳送門：瞬移至配對點（每次落地最多 1 次）</li>
+              <li><span class="legend-icon">🌀</span>傳送門：瞬移至配對點（彩色門僅限對應顏色，每次落地最多 1 次）</li>
               <li><span class="legend-icon">🎲</span>增壓：獲得額外擲骰機會</li>
               <li><span class="legend-icon">⚠️</span>亂流：下回合停飛一輪</li>
             </ul>
@@ -536,31 +536,39 @@
   // =========================== Rules Engine ============================
   (function(){
       const BOARD = {
-        boardSpecVersion: "skybound-variant-v2",
+        boardSpecVersion: "skybound-aurora-v1",
       track: { length: 52, orderClockwise: ["red","blue","yellow","green"], startIndex: { red:0, blue:13, yellow:26, green:39 } },
       homeLane: { length: 6, entryIndex: { red:50, blue:11, yellow:24, green:37 } },
       special: {
         safeTiles: {
           start:true,
-          extra:[3,9,16,22,29,35,42,48]
+          extra:[4,8,17,21,30,34,43,47]
         },
         powerTiles:[
-          {idx:5,effect:'extra-roll',label:'🎲'},
-          {idx:18,effect:'extra-roll',label:'🎲'},
-          {idx:31,effect:'extra-roll',label:'🎲'},
-          {idx:44,effect:'extra-roll',label:'🎲'}
+          {idx:6,effect:'extra-roll',label:'🎲'},
+          {idx:19,effect:'advance-2',label:'+2'},
+          {idx:32,effect:'extra-roll',label:'🎲'},
+          {idx:45,effect:'advance-2',label:'+2'}
         ],
         trapTiles:[
-          {idx:12,effect:'skip-turn',label:'⚠'},
-          {idx:25,effect:'skip-turn',label:'⚠'},
-          {idx:38,effect:'skip-turn',label:'⚠'},
-          {idx:51,effect:'skip-turn',label:'⚠'}
+          {idx:11,effect:'skip-turn',label:'⚠'},
+          {idx:24,effect:'skip-turn',label:'⚠'},
+          {idx:37,effect:'skip-turn',label:'⚠'},
+          {idx:50,effect:'skip-turn',label:'⚠'}
         ],
         portals:[
-          {label:'A',from:7,to:33},
-          {label:'A',from:33,to:7},
-          {label:'B',from:20,to:46},
-          {label:'B',from:46,to:20}
+          {label:'A',from:2,to:28},
+          {label:'A',from:28,to:2},
+          {label:'B',from:15,to:41},
+          {label:'B',from:41,to:15},
+          {label:'R',from:9,to:35,color:'red'},
+          {label:'R',from:35,to:9,color:'red'},
+          {label:'C',from:22,to:48,color:'blue'},
+          {label:'C',from:48,to:22,color:'blue'},
+          {label:'Y',from:29,to:5,color:'yellow'},
+          {label:'Y',from:5,to:29,color:'yellow'},
+          {label:'G',from:42,to:18,color:'green'},
+          {label:'G',from:18,to:42,color:'green'}
         ],
         ownColorJump: {
           enabled:true,
@@ -570,10 +578,10 @@
           indices:{}
         },
         flightPaths:{ enabled:true, captureOnLanding:true, edges:{
-          red:[{from:4,to:17},{from:8,to:21}],
-          blue:[{from:17,to:30},{from:21,to:34}],
-          yellow:[{from:30,to:43},{from:34,to:47}],
-          green:[{from:43,to:4},{from:47,to:8}],
+          red:[{from:3,to:18},{from:9,to:24}],
+          blue:[{from:16,to:31},{from:22,to:37}],
+          yellow:[{from:29,to:44},{from:35,to:2}],
+          green:[{from:42,to:7},{from:48,to:13}],
         } }
       },
       bases:{ perPlayer:4 }
@@ -688,7 +696,7 @@
       takeoff:"even", extraTurnOnSix:true, tripleSixPenalty:false,
       captureOnLand:true, stackEnabled:true, stackMovesTogether:false, blockadePassThrough:false,
       ownColorJump:{enabled:true,steps:4}, dashedFlight:{enabled:true,captureOnLanding:true},
-      homeLaneExactEntry:false, finishExact:"exact", safeTiles:{start:true,list:[3,9,16,22,29,35,42,48]},
+      homeLaneExactEntry:false, finishExact:"exact", safeTiles:{start:true,list:[4,8,17,21,30,34,43,47]},
       specials:{enabled:true,portalLimit:1,portalBypassBlockade:true},
       turnTimerSec:0, animSpeed:'normal', undoEnabled:true,
       takeoffAdvanceSteps:1, // 0 = stop on the start tile, 1 = step one tile after entering
@@ -1053,7 +1061,7 @@
   // =============================== App ================================
   const SVG_NS='http://www.w3.org/2000/svg';
   const SAVE_KEY='ac_save_v1';
-  const SAVE_VERSION='skybound-variant-v2';
+  const SAVE_VERSION='skybound-aurora-v1';
   const $ = (selector)=>document.querySelector(selector);
   const supportsDialog = (()=>{
     try{
@@ -2402,6 +2410,18 @@
       const css=getComputedStyle(document.documentElement);
       const color=(name)=>css.getPropertyValue(name).trim();
       const ensureColor=(value,fallback)=>{ const trimmed=(value||'').trim(); return trimmed.length?trimmed:fallback; };
+      const auroraGradient=el('radialGradient',{id:'aurora-glow',cx:'50%',cy:'50%',r:'60%'});
+      const accentRef=ensureColor(color('--accent'),'#38bdf8');
+      auroraGradient.appendChild(el('stop',{offset:'0%','stop-color':withAlpha(accentRef,0.55)}));
+      auroraGradient.appendChild(el('stop',{offset:'55%','stop-color':withAlpha(accentRef,0.18)}));
+      auroraGradient.appendChild(el('stop',{offset:'100%','stop-color':'rgba(0,0,0,0)'}));
+      defs.appendChild(auroraGradient);
+      const orbitGradient=el('linearGradient',{id:'aurora-orbit',x1:'0%',y1:'0%',x2:'100%',y2:'0%'});
+      orbitGradient.appendChild(el('stop',{offset:'0%','stop-color':withAlpha(accentRef,0.05)}));
+      orbitGradient.appendChild(el('stop',{offset:'45%','stop-color':withAlpha(accentRef,0.55)}));
+      orbitGradient.appendChild(el('stop',{offset:'55%','stop-color':withAlpha(accentRef,0.08)}));
+      orbitGradient.appendChild(el('stop',{offset:'100%','stop-color':withAlpha(accentRef,0.4)}));
+      defs.appendChild(orbitGradient);
       const colorMarkers=window.GameRules?.COLOR_MARKERS||{};
       const markerForColor=(col)=>colorMarkers[col]||null;
       const markerSymbol=(col)=>markerForColor(col)?.symbol||'●';
@@ -2417,39 +2437,23 @@
       const tileBaseFill=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.28);
       const tileBorderColor=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.72);
       const rad=(deg)=>deg*Math.PI/180;
-      const trackRadius=r-20;
-      const STADIUM_W=780,STADIUM_H=560,STADIUM_R=120;
-      const hw=STADIUM_W/2,hh=STADIUM_H/2,irx=hw-STADIUM_R,iry=hh-STADIUM_R;
-      const trackSegments=[
-        {type:'line',len:2*irx,a:{x:-irx,y:-hh},b:{x: irx,y:-hh}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y:-iry},r:STADIUM_R,th0:-Math.PI/2,th1:0},
-        {type:'line',len:2*iry,a:{x: hw,y:-iry},b:{x: hw,y: iry}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y: iry},r:STADIUM_R,th0:0,th1:Math.PI/2},
-        {type:'line',len:2*irx,a:{x: irx,y: hh},b:{x:-irx,y: hh}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x:-irx,y: iry},r:STADIUM_R,th0:Math.PI/2,th1:Math.PI},
-        {type:'line',len:2*iry,a:{x:-hw,y: iry},b:{x:-hw,y:-iry}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x:-irx,y:-iry},r:STADIUM_R,th0:Math.PI,th1:3*Math.PI/2},
-      ];
-      const trackPerimeter=trackSegments.reduce((sum,segment)=>sum+segment.len,0);
-      const stadiumPoint=(t)=>{
-        let s=(t-Math.floor(t))*trackPerimeter;
-        for(const g of trackSegments){
-          if(s<=g.len){
-            if(g.type==='line'){
-              const u=s/g.len,dx=g.b.x-g.a.x,dy=g.b.y-g.a.y;
-              const x=g.a.x+dx*u,y=g.a.y+dy*u;
-              const tangent=Math.atan2(dy,dx);
-              return{ x:cx+x,y:cy+y,tangent };
-            }else{
-              const u=s/g.len,th=g.th0+(g.th1-g.th0)*u;
-              const x=g.c.x+g.r*Math.cos(th),y=g.c.y+g.r*Math.sin(th);
-              const tangent=th+Math.PI/2;
-              return{ x:cx+x,y:cy+y,tangent };
-            }
-          }
-          s-=g.len;
-        }
-        return{ x:cx,y:cy-hh,tangent:Math.PI/2 };
+      const trackRadius=r-24;
+      const petals=4;
+      const baseRadius=isCompact?trackRadius-72:trackRadius-60;
+      const waveAmplitude=isCompact?54:72;
+      const angleOffset=-Math.PI/2;
+      const radiusAt=(theta)=>baseRadius+waveAmplitude*Math.cos(petals*theta);
+      const drAt=(theta)=>-waveAmplitude*petals*Math.sin(petals*theta);
+      const pointOnWave=(fraction)=>{
+        const theta=angleOffset+fraction*2*Math.PI;
+        const radius=radiusAt(theta);
+        const dr=drAt(theta);
+        const x=cx+radius*Math.cos(theta);
+        const y=cy+radius*Math.sin(theta);
+        const dx=dr*Math.cos(theta)-radius*Math.sin(theta);
+        const dy=dr*Math.sin(theta)+radius*Math.cos(theta);
+        const tangent=Math.atan2(dy,dx);
+        return{ x,y,tangent };
       };
       const normalFromAngle=(a)=>({nx:-Math.sin(a),ny:Math.cos(a)});
       const arcPath=(centerX,centerY,rInner,rOuter,startDeg,endDeg)=>{
@@ -2492,15 +2496,15 @@
       };
       const drawQuadrant=(startDeg,endDeg,colorHex,label)=>{
         if(gBack){
-          const path=arcPath(cx,cy,trackRadius-50,trackRadius+46,startDeg,endDeg);
+          const path=arcPath(cx,cy,trackRadius-86,trackRadius+54,startDeg,endDeg);
           gBack.appendChild(el('path',{d:path,fill:withAlpha(colorHex,0.08)}));
         }
         const hudStatic=this._hudLayers?.static;
         if(hudStatic){
           const mid=(startDeg+endDeg)/2;
-          const rx=cx+Math.cos(rad(mid))*(trackRadius+quadrantLabelOutset);
-          const ry=cy+Math.sin(rad(mid))*(trackRadius+quadrantLabelOutset);
-          hudStatic.appendChild(el('text',{x:rx,y:ry,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(colorHex,0.38),'font-weight':'600'},[document.createTextNode(label)]));
+          const rx=cx+Math.cos(rad(mid))*(trackRadius+quadrantLabelOutset+12);
+          const ry=cy+Math.sin(rad(mid))*(trackRadius+quadrantLabelOutset+12);
+          hudStatic.appendChild(el('text',{x:rx,y:ry,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(colorHex,0.42),'font-weight':'600'},[document.createTextNode(label)]));
         }
       };
       const tooltipFor=(info)=>{
@@ -2530,20 +2534,29 @@
         return '';
       };
       if(gBack){
-        gBack.appendChild(el('circle',{cx,cy,r:r+60,fill:withAlpha(ensureColor(color('--bg'),'#0a0a0a'),0.88),stroke:withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.4),'stroke-width':2}));
+        const bgBase=ensureColor(color('--bg'),'#0a0a0a');
+        const gridStroke=ensureColor(color('--tile-grid'),'#1f2937');
+        const accentBase=accentRef;
+        gBack.appendChild(el('circle',{cx,cy,r:r+120,fill:'url(#aurora-glow)',opacity:0.9}));
+        gBack.appendChild(el('circle',{cx,cy,r:r+60,fill:withAlpha(bgBase,0.85),stroke:withAlpha(gridStroke,0.38),'stroke-width':1.8}));
+        gBack.appendChild(el('circle',{cx,cy,r:trackRadius+78,fill:'none',stroke:withAlpha(accentBase,0.22),'stroke-width':3,'stroke-dasharray':'18 14','stroke-linecap':'round'}));
+        gBack.appendChild(el('circle',{cx,cy,r:trackRadius-110,fill:'none',stroke:withAlpha(gridStroke,0.32),'stroke-width':1.6,'stroke-dasharray':'6 10'}));
+        const orbit=el('path',{d:`M ${cx-(trackRadius+48)} ${cy} A ${trackRadius+48} ${trackRadius+48} 0 0 1 ${cx+(trackRadius+48)} ${cy}`,'stroke':'url(#aurora-orbit)','stroke-width':2.8,'stroke-linecap':'round',fill:'none',opacity:0.85});
+        gBack.appendChild(orbit);
       }
       const quadrants=[
-        {label:'R',color:color('--red'),start:-135,end:-45},
-        {label:'B',color:color('--blue'),start:-45,end:45},
-        {label:'Y',color:color('--yellow'),start:45,end:135},
-        {label:'G',color:color('--green'),start:135,end:225}
+        {label:'北',color:color('--red'),start:-135,end:-45},
+        {label:'東',color:color('--blue'),start:-45,end:45},
+        {label:'南',color:color('--yellow'),start:45,end:135},
+        {label:'西',color:color('--green'),start:135,end:225}
       ];
       quadrants.forEach(q=>drawQuadrant(q.start,q.end,q.color,q.label));
       const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJumpData=window.GameRules.BOARD.special.ownColorJump||{};
-      const trackOffsetNormalized=(trackSegments[0].len/2)/trackPerimeter;
-      const trackOffsetTiles=trackOffsetNormalized*total;
       const points=new Array(total);
-      for(let i=0;i<total;i++) points[i]=stadiumPoint((i+trackOffsetTiles)/total);
+      for(let i=0;i<total;i++){
+        const fraction=i/total;
+        points[i]=pointOnWave(fraction);
+      }
       const specials=window.GameRules.BOARD.special||{};
       const safeExtras=new Set((specials.safeTiles?.extra)||[]);
       const specialByIdx=window.GameRules.SPECIAL_BY_IDX||{};
