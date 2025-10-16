@@ -802,8 +802,14 @@
         }
         if(pos.kind==='base'){
           if(canTakeoffWith(dice,rules)){
-            const destIdx = BOARD.track.startIndex[player.color];
-            const tileOcc = occ.track[destIdx];
+            const startIndexMap = BOARD?.track?.startIndex || {};
+            const rawDestIdx = startIndexMap[player.color];
+            if(typeof rawDestIdx!=='number' || Number.isNaN(rawDestIdx)){
+              warnings.push({type:'invalid-start',playerId:player.id,color:player.color});
+              return;
+            }
+            const destIdx = mod(rawDestIdx, BOARD.track.length);
+            const tileOcc = occ.track[destIdx] || {};
             const enemyCount = Object.entries(tileOcc).filter(([c,n])=>c!==player.color).reduce((a,[,n])=>a+n,0);
             const allyCount = tileOcc[player.color]||0;
             if(!(allyCount>0 && !rules.stackEnabled) && !(enemyCount>=2 && !rules.blockadePassThrough)){
@@ -1867,6 +1873,12 @@
           const tileLabel=(typeof warning.idx==='number')?`格 ${warning.idx}`:'該格';
           this.showToast(`🌀 傳送門落點被堵住（${tileLabel}）`,1800);
           this.log(`${name} 起飛受阻：傳送門落點被敵方堵路（${tileLabel}）`,{color:player?.color||null});
+        }else if(warning.type==='invalid-start'){
+          const player=this.state.players.find(p=>p.id===warning.playerId);
+          const name=this.formatPlayerName(player,{includeDifficulty:true});
+          const colorLabel=(warning.color && COLOR_LABELS?.[warning.color])||warning.color||'該顏色';
+          this.showToast('⚠️ 無法起飛：起點未定義',1600);
+          this.log(`${name} 無法起飛：棋盤未定義 ${colorLabel} 的起點`,{tone:'warning',color:player?.color||null});
         }
       });
     },
