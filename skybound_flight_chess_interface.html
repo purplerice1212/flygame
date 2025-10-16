@@ -1135,7 +1135,7 @@
         return;
       }
       if(typeof Promise==='function'){
-        Promise.resolve().then(()=>callback()).catch(()=>setTimeout(()=>callback(),0));
+        Promise.resolve().then(()=>callback());
         return;
       }
       setTimeout(()=>callback(),0);
