@@ -22,6 +22,7 @@ Skybound Flight Chess 是針對傳統飛行棋玩法打造的瀏覽器 MVP 介�
 - **主題切換與上一步回放**：支援深色／淺色／高對比主題即時切換，並在側邊欄顯示最近一步行動摘要與「重播上一步」路徑高亮。
 - **回合控制**：內建 Undo、重開局、暫停回合（亂流）、倒數計時與 AI 自動出手。
 - **無障礙考量**：語意化結構、ARIA 標籤與鍵盤操作提示，確保主要互動皆可使用鍵盤完成。
+- **AI 難度決策調校 / Difficulty-tailored AI**：AI 現在會依照難度改變保守程度、追趕策略與風險評估，提供由易到難的層次化挑戰。
 
 ## 特殊格行為：亂流陷阱（Trap Tile）
 在預設棋盤上，索引為 12、25、38、51 的格子標記為陷阱（圖示 `⚠`）。當棋子停在這些格子上時會觸發以下流程：
@@ -131,6 +132,18 @@ Skybound Flight Chess 是針對傳統飛行棋玩法打造的瀏覽器 MVP 介�
 - `pulseAt(x, y, color)`：於特定座標顯示脈衝效果。
 - `computeThreatFaces(targetIdx)`：計算敵方可能襲擊指定格子的骰面值。
 - `showThreatBadge(x, y, faces)`：顯示對應威脅骰值的提醒徽章。
+
+## AI Difficulty Refinements（AI 難度決策優化）
+
+### English
+- **Easy**：Prefers getting planes out of the base and staying on safer tiles, with extra randomness to keep the challenge relaxed.
+- **Normal**：Balances safety with steady progress, reacting more when trailing by prioritising catch-up moves and recovering from threats.
+- **Hard**：Evaluates exposure, blockades, and finishing tempo more deeply, rewarding captures and low-risk advances to pressure human players.
+
+### 繁體中文
+- **簡單**：偏好起飛與停留在安全格，並加入額外隨機性，營造輕鬆節奏。
+- **普通**：在安全與推進間取得平衡，落後時會更積極追趕並降低受威脅的機率。
+- **困難**：會進一步評估暴露度、堵路與終點節奏，優先吃子與低風險推進，對人類玩家形成壓力。
 
 ## Development Tips
 - 若需擴充邏輯，可將 `GameRules` 與 `App` 拆分為模組並補齊型別註記或測試。

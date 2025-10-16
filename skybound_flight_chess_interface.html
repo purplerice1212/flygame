@@ -3954,18 +3954,72 @@
       };
       const myPieces=this.state.pieces[player.id]||[];
       const clonePos=(pos)=>this.clonePosition(pos);
-      const myPositions=myPieces.map(pc=>clonePos(pc?.pos));
       const buildTrackCounts=(positions)=>{
         const counts=Array(trackLength).fill(0);
         positions.forEach(pos=>{ if(pos?.kind==='track'){ counts[pos.idx]=(counts[pos.idx]||0)+1; } });
         return counts;
       };
-      const myTrackCounts=buildTrackCounts(myPositions);
+      const snapshotFor=(color,pieces)=>{
+        const positions=pieces.map(pc=>clonePos(pc?.pos));
+        const counts=buildTrackCounts(positions);
+        let finished=0;
+        let out=0;
+        let distSum=0;
+        let closest=Number.POSITIVE_INFINITY;
+        let furthest=0;
+        positions.forEach(pos=>{
+          if(!pos) return;
+          if(pos.kind==='finished') finished+=1;
+          if(pos.kind!=='base') out+=1;
+          const dist=distToFinish(color,pos);
+          distSum+=dist;
+          if(pos.kind!=='base' && pos.kind!=='finished'){
+            if(dist<closest) closest=dist;
+            if(dist>furthest) furthest=dist;
+          }
+        });
+        if(!Number.isFinite(closest)) closest=distSum;
+        return {
+          positions,
+          counts,
+          finished,
+          out,
+          distSum,
+          closest,
+          furthest,
+          exposure:computeExposureSum(positions,counts)
+        };
+      };
+      const mySnapshot=snapshotFor(player.color,myPieces);
+      const myPositions=mySnapshot.positions;
+      const myTrackCounts=mySnapshot.counts;
       const opponents=this.state.players.filter(p=>p.id!==player.id);
-      const opponentPieces=[];
-      opponents.forEach(opp=>{
-        (this.state.pieces[opp.id]||[]).forEach(pc=>{ if(pc?.pos) opponentPieces.push({color:opp.color,pos:clonePos(pc.pos)}); });
+      const opponentSnapshots=opponents.map(opp=>{
+        const pieces=this.state.pieces[opp.id]||[];
+        const snap=snapshotFor(opp.color,pieces);
+        return Object.assign({id:opp.id,color:opp.color},snap);
       });
+      const opponentPieces=[];
+      opponentSnapshots.forEach(snap=>{
+        snap.positions.forEach(pos=>{ if(pos) opponentPieces.push({color:snap.color,pos}); });
+      });
+      const bestDist=opponentSnapshots.length>0?Math.min(...opponentSnapshots.map(s=>s.distSum)):mySnapshot.distSum;
+      const worstDist=opponentSnapshots.length>0?Math.max(...opponentSnapshots.map(s=>s.distSum)):mySnapshot.distSum;
+      const bestExposure=opponentSnapshots.length>0?Math.min(...opponentSnapshots.map(s=>s.exposure)):mySnapshot.exposure;
+      const mostFinished=opponentSnapshots.length>0?Math.max(...opponentSnapshots.map(s=>s.finished)):mySnapshot.finished;
+      const mostOut=opponentSnapshots.length>0?Math.max(...opponentSnapshots.map(s=>s.out)):mySnapshot.out;
+      const behindCount=opponentSnapshots.filter(s=>s.distSum<mySnapshot.distSum).length;
+      const aheadCount=opponentSnapshots.filter(s=>s.distSum>mySnapshot.distSum).length;
+      const standing={
+        distGapToLeader:mySnapshot.distSum-bestDist,
+        distGapToLaggard:worstDist-mySnapshot.distSum,
+        exposureGap:mySnapshot.exposure-bestExposure,
+        finishedGap:mostFinished-mySnapshot.finished,
+        outGap:mostOut-mySnapshot.out,
+        behindCount,
+        aheadCount,
+        hasLead:mySnapshot.distSum<=bestDist && mySnapshot.finished>=mostFinished
+      };
       const threatDetailAt=(idx,{stackSize=1}={})=>{
         if(idx==null) return {prob:0,faces:new Set(),intensity:0};
         if(isSafeTile(player.color,idx)) return {prob:0,faces:new Set(),intensity:0};
@@ -4149,6 +4203,52 @@
           blockPressure
         };
       });
+      const tuneByDifficulty=()=>{
+        if(difficulty==='easy'){
+          scored.forEach(entry=>{
+            let adjust=0;
+            if(entry.safeValue>=1) adjust+=weights.W_safe*3*entry.safeValue;
+            if(entry.safePenalty>0) adjust-=weights.W_safe*4*entry.safePenalty;
+            if(entry.outGain) adjust+=weights.W_out*2.5;
+            if(entry.progress>=4) adjust+=weights.W_progress*0.4*entry.progress;
+            if(entry.threat.prob>0.25) adjust-=weights.W_risk*5*(entry.threat.prob-0.25);
+            entry.score+=adjust;
+            entry.score+=(Math.random()-0.5)*weights.W_tempo*4;
+          });
+          return;
+        }
+        if(difficulty==='normal'){
+          const catchUpFactor=Math.max(0,standing.distGapToLeader)/8;
+          scored.forEach(entry=>{
+            let adjust=0;
+            if(standing.outGap>0 && entry.outGain) adjust+=weights.W_out*3*Math.min(standing.outGap,2);
+            if(catchUpFactor>0 && entry.progress>0) adjust+=weights.W_progress*catchUpFactor*entry.progress*0.6;
+            if(entry.threatBefore.prob>0.45 && entry.threat.prob<entry.threatBefore.prob) adjust+=weights.W_risk*4;
+            if(standing.finishedGap<=0 && entry.endfit>0) adjust+=weights.W_endfit*3*entry.endfit;
+            entry.score+=adjust;
+            entry.score+=(Math.random()-0.5)*weights.W_tempo*2;
+          });
+          return;
+        }
+        if(difficulty==='hard'){
+          const catchUpFactor=Math.max(0,standing.distGapToLeader)/6;
+          const exposureRelief=Math.max(0,standing.exposureGap);
+          scored.forEach(entry=>{
+            let adjust=0;
+            if(catchUpFactor>0 && entry.progress>0) adjust+=weights.W_progress*(catchUpFactor*entry.progress*1.1);
+            if(entry.captureCount>0) adjust+=weights.W_eat*(2+Math.max(0,standing.finishedGap));
+            if(entry.threat.prob<entry.threatBefore.prob) adjust+=weights.W_risk*8*Math.max(0,entry.threatBefore.prob-entry.threat.prob);
+            if(entry.afterExposure<baseExposure) adjust+=weights.W_risk*6*(baseExposure-entry.afterExposure);
+            if(entry.safePenalty===0 && entry.safeValue>=1 && standing.hasLead) adjust+=weights.W_safe*4*entry.safeValue;
+            if(entry.endfit>2.4) adjust+=weights.W_endfit*6;
+            if(entry.blockPressure>0) adjust+=weights.W_tempo*5*entry.blockPressure;
+            if(entry.move?.to?.kind==='home' && entry.progress<=6) adjust+=weights.W_endfit*4;
+            if(exposureRelief>0 && entry.afterExposure<mySnapshot.exposure) adjust+=weights.W_risk*4*exposureRelief;
+            entry.score+=adjust;
+          });
+        }
+      };
+      tuneByDifficulty();
       if(difficulty==='normal' || difficulty==='hard'){
         scored.forEach(entry=>{
           const expectedLoss=entry.threat.prob*(entry.progress*0.6+(entry.captureCount>0?2:1)+(entry.safeValue<0.6?2:0));
