@@ -1113,7 +1113,7 @@
     });
   }
   const App = {
-    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, skipTurns:{}, turbulenceRecoveries:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
+    state:{ view:'lobby', players:[], rules:null, pieces:{}, turn:null, dice:null, history:[], settings:{keyboardMode:'shared',theme:'dark'}, animating:false, consecutiveSixes:{}, turnTimerId:null, turnTimerRemaining:0, controlById:{}, inputLockUntil:0, bonusSelecting:false, pendingBonus:null, pendingExtraTurn:false, skipTurns:{}, turbulenceRecoveries:{}, lastMoveSummary:null, finishOrder:[], winner:null, disabledColors:{}, finishedSlots:{} },
     _lastWarningsSignature:'',
     _piecesObserver:null,
     geom:{ track:[], home:{}, bases:{}, runway:{}, finishedSlots:{} },
@@ -2103,6 +2103,7 @@
       if(celebration && celebration.parentNode) celebration.parentNode.removeChild(celebration);
       this.state.players=players; this.normalizePlayerControls(); this.state.turn=players[0].id; this.state.history=[]; this.state.pieces={};
       this.state.consecutiveSixes={};
+      this.state.pendingExtraTurn=false;
       this.state.skipTurns={};
       this.state.turbulenceRecoveries={};
       this.state.bonusSelecting=false;
@@ -2198,6 +2199,7 @@
       const pieceCount=window.GameRules.BOARD.bases.perPlayer||1;
       this.state.pieces={};
       this.state.consecutiveSixes={};
+      this.state.pendingExtraTurn=false;
       this.state.skipTurns={};
       this.state.bonusSelecting=false;
       this.state.pendingBonus=null;
@@ -3734,6 +3736,7 @@
         turbulenceRecoveries:this.state.turbulenceRecoveries,
         bonusSelecting:this.state.bonusSelecting,
         pendingBonus:this.state.pendingBonus,
+        pendingExtraTurn:this.state.pendingExtraTurn,
         settings:this.state.settings,
         lastMoveSummary:this.state.lastMoveSummary,
         finishOrder:this.state.finishOrder,
@@ -3790,6 +3793,7 @@
       this.state.players.forEach(p=>{ if(this.state.turbulenceRecoveries[p.id]==null) this.state.turbulenceRecoveries[p.id]=0; });
       this.state.bonusSelecting=!!snapshot.bonusSelecting;
       this.state.pendingBonus=snapshot.pendingBonus||null;
+      this.state.pendingExtraTurn=!!snapshot.pendingExtraTurn;
       this.state.history=[];
       this.state.lastMoveSummary=snapshot.lastMoveSummary||null;
       this.state.finishOrder=Array.isArray(snapshot.finishOrder)?snapshot.finishOrder.slice():[];
@@ -3839,6 +3843,8 @@
       this.state.dice=snap.dice??null; this.state.consecutiveSixes=snap.consecutiveSixes||{};
       this.state.skipTurns=snap.skipTurns||{};
       this.state.turbulenceRecoveries=snap.turbulenceRecoveries||{};
+      this.state.pendingBonus=snap.pendingBonus||null;
+      this.state.pendingExtraTurn=!!snap.pendingExtraTurn;
       this.state.finishOrder=Array.isArray(snap.finishOrder)?snap.finishOrder.slice():[];
       this.state.winner=snap.winner||null;
       this.state.disabledColors=Object.assign({},snap.disabledColors||{});
