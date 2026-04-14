@@ -23,8 +23,8 @@ Use this checklist to drive the MVP to a release-ready version.
 - [ ] Add first-time tutorial/onboarding hints.
 
 ## 5) Release Operations
-- [ ] Add `LICENSE`.
-- [ ] Add `CHANGELOG.md`.
+- [x] Add `LICENSE`.
+- [x] Add `CHANGELOG.md`.
 - [ ] Configure CI checks (lint + tests + basic static checks).
 - [ ] Publish a playable deployment target (GitHub Pages / Netlify).
 
