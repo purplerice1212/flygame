@@ -187,6 +187,9 @@
     #specials-legend .legend-icon-safe{background:rgba(190,227,248,0.24);color:#e0f2fe}
     #specials-legend .status-line{font-size:.85rem;margin:12px 0 0;color:#a1a9ba}
     #specials-legend .legend-note{font-size:.78rem;margin:6px 0 0;color:#94a3b8}
+    #specials-legend .audit-status{font-size:.8rem;margin:8px 0 0;color:#94a3b8}
+    #specials-legend .audit-errors{margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:#fca5a5}
+    #specials-legend .audit-errors li{line-height:1.35}
     #specials-legend[data-disabled="true"]{opacity:.5}
     #specials-legend[data-disabled="true"] [data-specials-status]{color:#f87171}
     #specials-legend[data-disabled="false"] [data-specials-status]{color:#34d399}
@@ -196,6 +199,7 @@
     body[data-theme="light"] #specials-legend .legend-icon-direction{background:rgba(15,23,42,0.08);color:#0f172a}
     body[data-theme="light"] #specials-legend .legend-icon-safe{background:rgba(59,130,246,0.15);color:#1d4ed8}
     body[data-theme="light"] #specials-legend .legend-icon-start{color:#0f172a}
+    body[data-theme="light"] #specials-legend .audit-errors{color:#b91c1c}
     body[data-theme="high"] #color-key{background:rgba(15,23,42,0.92);border-color:#38bdf8}
     body[data-theme="high"] #specials-legend{background:rgba(2,6,23,0.92);border-color:#38bdf8}
     body[data-theme="high"] #specials-legend .legend-icon{background:rgba(148,163,184,0.28);border-color:#38bdf8;color:#f8fafc}
@@ -421,6 +425,8 @@
           </div>
           <p class="muted status-line">特殊格目前：<span data-specials-status>啟用</span></p>
           <p class="muted legend-note">結算順序（固定）：<span id="specials-order"></span></p>
+          <p class="muted audit-status">地圖檢查：<span id="map-audit-status">未檢查</span></p>
+          <ul id="map-audit-errors" class="audit-errors" hidden></ul>
         </section>
       </aside>
     </section>
@@ -636,6 +642,7 @@
     BOARD.special.ownColorJump.lookupByIndex = OWN_COLOR_JUMP_DATA.lookupByIndex;
 
     function validateBoard(BOARD){
+      const issues=[];
       const safe = new Set([
         ...((BOARD.special?.safeTiles?.extra)||[]),
         ...((BOARD.special?.safeTiles?.list)||[])
@@ -650,14 +657,45 @@
         if(typeof idx!=='number') return;
         map.set(idx,(map.get(idx)||[]).concat(type));
       };
+      const trackLength=Number(BOARD?.track?.length)||0;
+      const isValidTrackIdx=(idx)=>Number.isInteger(idx)&&idx>=0&&idx<trackLength;
       (BOARD.special?.powerTiles||[]).forEach(p=>reg(p.idx,'power'));
       (BOARD.special?.trapTiles||[]).forEach(t=>reg(t.idx,'trap'));
       (BOARD.special?.portals||[]).forEach(p=>reg(p.from,'portal'));
       const conflicts=[...map.entries()].filter(([idx,types])=>types.length>1 || safe.has(idx));
-      if(conflicts.length) console.warn('Conflicting specials:', conflicts);
+      if(conflicts.length){
+        issues.push(`特殊格重疊或與安全格衝突：${conflicts.map(([idx])=>idx).join(', ')}`);
+      }
+      const startValues=Object.values(BOARD?.track?.startIndex||{});
+      const entryValues=Object.values(BOARD?.homeLane?.entryIndex||{});
+      startValues.forEach((idx)=>{ if(!isValidTrackIdx(idx)) issues.push(`起飛格索引超出範圍：${idx}`); });
+      entryValues.forEach((idx)=>{ if(!isValidTrackIdx(idx)) issues.push(`入家索引超出範圍：${idx}`); });
+      if(trackLength>0 && startValues.length===4){
+        const expectedGap=Math.floor(trackLength/4);
+        const sorted=[...startValues].sort((a,b)=>a-b);
+        const gaps=sorted.map((v,i)=>{
+          const nxt=sorted[(i+1)%sorted.length];
+          return (nxt-v+trackLength)%trackLength;
+        });
+        if(gaps.some(gap=>gap!==expectedGap)){
+          issues.push(`四個起飛格間距不均（目前 ${gaps.join('/')}, 建議都為 ${expectedGap}）`);
+        }
+      }
+      (BOARD.special?.portals||[]).forEach((p)=>{
+        if(!isValidTrackIdx(p?.from)||!isValidTrackIdx(p?.to)){
+          issues.push(`傳送門 ${p?.label||'?'} 索引超出範圍（${p?.from}→${p?.to}）`);
+        }
+      });
+      Object.values(BOARD?.special?.flightPaths?.edges||{}).flat().forEach((edge)=>{
+        if(!isValidTrackIdx(edge?.from)||!isValidTrackIdx(edge?.to)){
+          issues.push(`飛行路徑索引超出範圍（${edge?.from}→${edge?.to}）`);
+        }
+      });
+      if(issues.length) console.warn('Board validation issues:', issues);
+      return Object.freeze({ok:issues.length===0,issues});
     }
 
-    validateBoard(BOARD);
+    const BOARD_VALIDATION = validateBoard(BOARD);
 
     const COLOR_MARKERS = Object.freeze({
       red:{shape:'triangle',symbol:'▲',label:'紅'},
@@ -1048,7 +1086,7 @@
       return {captured};
     }
 
-    window.GameRules = { BOARD, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith, SPECIAL_RESOLUTION_ORDER, SPECIAL_BY_IDX, COLOR_MARKERS };
+    window.GameRules = { BOARD, BOARD_VALIDATION, DEFAULT_RULES, generateLegalMoves, simulateMove, buildOccupancy, Pos, canTakeoffWith, SPECIAL_RESOLUTION_ORDER, SPECIAL_BY_IDX, COLOR_MARKERS };
 
     // (Tests removed in production build)
   })();
@@ -1192,7 +1230,7 @@
         diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'), hintCard:$('#hint-card'), turnBanner:$('#turn-banner'), toast:$('#toast-host'),
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gBack:$('#layer-background'), gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gHud:$('#layer-hud'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
-        boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order'),
+        boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order'), mapAuditStatus:$('#map-audit-status'), mapAuditErrors:$('#map-audit-errors'),
         theme:$('#theme'), rulesAdvanced, rulesAdvancedSummary:rulesAdvanced?rulesAdvanced.querySelector('summary'):null, lastMoveCard:$('#last-move-card'), lastMoveSummary:$('#last-move-summary'), lastMoveMeta:$('#last-move-meta'), lastMoveCaptured:$('#last-move-captured'), btnReplayLast:$('#btn-replay-last'),
         dialogVictory:$('#dialog-victory'), victoryWinnerName:document.querySelector('[data-winner-name]'), victoryWinnerColor:document.querySelector('[data-winner-color]'), victorySubtitle:document.querySelector('[data-victory-subtitle]'), victoryOrder:$('#victory-order'), victoryList:document.querySelector('[data-finish-order]')
       };
@@ -1473,6 +1511,27 @@
         };
         const order=(window.GameRules?.SPECIAL_RESOLUTION_ORDER||[]).map(key=>labels[key]||key).join(' → ');
         orderEl.textContent=order;
+      }
+      const auditStatusEl=this.$?.mapAuditStatus;
+      const auditErrorsEl=this.$?.mapAuditErrors;
+      const boardIssues=Array.isArray(window.GameRules?.BOARD_VALIDATION?.issues)?window.GameRules.BOARD_VALIDATION.issues:[];
+      const geomIssues=Array.isArray(this.state?.boardAudit?.issues)?this.state.boardAudit.issues:[];
+      const issues=[...boardIssues,...geomIssues];
+      if(auditStatusEl){
+        auditStatusEl.textContent=issues.length?`⚠ ${issues.length} 個問題`:'✅ 通過';
+      }
+      if(auditErrorsEl){
+        auditErrorsEl.innerHTML='';
+        if(issues.length){
+          issues.forEach((msg)=>{
+            const li=document.createElement('li');
+            li.textContent=`• ${msg}`;
+            auditErrorsEl.appendChild(li);
+          });
+          auditErrorsEl.hidden=false;
+        }else{
+          auditErrorsEl.hidden=true;
+        }
       }
     },
     onResize(){
@@ -2870,8 +2929,39 @@
       gSpecials.appendChild(gRunways);
       if(svg && this.$?.gHL) svg.appendChild(this.$.gHL);
       if(svg && this.$?.gPieces) svg.appendChild(this.$.gPieces);
+      this.state.boardAudit=this.auditGeometry(geom);
       this.clearGhostPath();
       this.observePiecesLayer();
+    },
+    auditGeometry(geom){
+      const issues=[];
+      const track=Array.isArray(geom?.track)?geom.track:[];
+      const minSpacing=30;
+      for(let i=0;i<track.length;i++){
+        const a=track[i];
+        if(!a) continue;
+        for(let j=i+1;j<track.length;j++){
+          const b=track[j];
+          if(!b) continue;
+          const d=Math.hypot(a.x-b.x,a.y-b.y);
+          if(d<minSpacing){
+            issues.push(`幾何重疊：軌道 ${i} 與 ${j} 距離過近（${d.toFixed(1)}）`);
+            i=track.length;
+            break;
+          }
+        }
+      }
+      const home=geom?.home||{};
+      const laneEnds=Object.values(home).map((lane)=>Array.isArray(lane)?lane[lane.length-1]:null).filter(Boolean);
+      if(laneEnds.length>=2){
+        const center={x:500,y:500};
+        const distances=laneEnds.map((pt)=>Math.hypot(pt.x-center.x,pt.y-center.y));
+        const spread=Math.max(...distances)-Math.min(...distances);
+        if(spread>6){
+          issues.push(`入家終點離中心距離差異過大（最大差 ${spread.toFixed(1)}）`);
+        }
+      }
+      return {ok:issues.length===0,issues};
     },
     clearGhostPath(){
       const layer=this._hudLayers?.dynamic;
