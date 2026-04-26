@@ -14,7 +14,7 @@ Use this checklist to drive the MVP to a release-ready version.
 
 ## 3) Gameplay Completion
 - [ ] Finalize winner flow (result summary + replay options).
-- [ ] Validate rule conflict priorities and document final behavior.
+- [x] Validate rule conflict priorities and document final behavior (see `RULE_CONFLICT_MATRIX.md`).
 - [ ] Add at least 3 polished presets for casual players.
 
 ## 4) UX / Accessibility
