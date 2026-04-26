@@ -100,6 +100,8 @@
     legend{padding:0 8px}
     label{display:flex;align-items:center;gap:8px}
     .row{display:flex;gap:8px;flex-wrap:wrap}
+    .panel-section{margin-top:12px}
+    .panel-section h3{font-size:1rem}
     #preset-options{align-items:stretch}
     .preset-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:180px;padding:12px;border-radius:12px;border:1px solid #1f2937;background:rgba(15,23,42,0.6);cursor:pointer;transition:border-color .18s ease,background .18s ease}
     .preset-card:hover{border-color:rgba(34,211,238,0.45)}
@@ -216,6 +218,7 @@
   </style>
 </head>
 <body>
+  <a class="sr-only" href="#app">跳到主要內容</a>
   <header class="container app-bar" role="banner">
     <div class="row" aria-label="brand">
       <strong>✈️ 飛行棋</strong>
@@ -365,37 +368,39 @@
       </div>
 
       <aside class="card" aria-label="回合控制">
-        <div class="row" style="justify-content:space-between">
+        <header class="row" style="justify-content:space-between">
           <strong id="turn-indicator">當前：—</strong>
           <span id="timer" class="muted" aria-live="polite"></span>
-        </div>
+        </header>
         <div class="row" style="margin-top:8px">
           <button class="btn" id="btn-roll" type="button" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
           <output id="dice-output" aria-live="polite" class="pill" role="status">–</output>
         </div>
-        <div style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
+        <section class="panel-section" aria-labelledby="movables-title">
+          <h3 class="section-title" id="movables-title">可移動棋子</h3>
           <div id="movables" class="list" aria-live="polite"></div>
-        </div>
-        <div id="toast-host" aria-live="polite"></div>
-        <div id="hint-card" aria-live="polite"></div>
-        <section id="last-move-card" aria-live="polite" data-empty="true">
-          <h3 class="section-title" style="font-size:1rem">上一步動作</h3>
+        </section>
+        <section class="panel-section" aria-live="polite" aria-label="動作提示">
+          <div id="toast-host" aria-live="polite"></div>
+          <div id="hint-card" aria-live="polite"></div>
+        </section>
+        <section id="last-move-card" aria-live="polite" data-empty="true" class="panel-section">
+          <h3 class="section-title">上一步動作</h3>
           <p id="last-move-summary" class="muted">尚未有移動記錄。</p>
           <p id="last-move-meta" class="last-move-meta"></p>
           <ul id="last-move-captured"></ul>
           <button class="btn" type="button" id="btn-replay-last" disabled aria-disabled="true">重播上一步</button>
         </section>
-        <div style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">戰報</h3>
+        <section class="panel-section" aria-labelledby="log-title">
+          <h3 class="section-title" id="log-title">戰報</h3>
           <div id="log" class="log" role="log" aria-live="polite"></div>
-        </div>
-        <div class="row" style="margin-top:12px">
+        </section>
+        <div class="row panel-section">
           <button class="btn" id="btn-undo" type="button">Undo</button>
           <button class="btn" id="btn-restart" type="button">重開局</button>
         </div>
-        <section id="color-key" aria-label="顏色圖例" style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">起點圖例</h3>
+        <section id="color-key" aria-label="顏色圖例" class="panel-section">
+          <h3 class="section-title">起點圖例</h3>
           <ul class="color-key-list">
             <li class="color-key-item"><span class="color-key-symbol" data-color="red">▲</span>紅隊三角</li>
             <li class="color-key-item"><span class="color-key-symbol" data-color="blue">■</span>藍隊方形</li>
@@ -403,8 +408,8 @@
             <li class="color-key-item"><span class="color-key-symbol" data-color="green">✚</span>綠隊十字</li>
           </ul>
         </section>
-        <section id="specials-legend" aria-label="棋盤圖例" style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">棋盤圖例</h3>
+        <section id="specials-legend" aria-label="棋盤圖例" class="panel-section">
+          <h3 class="section-title">棋盤圖例</h3>
           <div class="legend-group">
             <h4>路徑</h4>
             <ul class="legend-list">
