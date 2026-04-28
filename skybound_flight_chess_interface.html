@@ -707,6 +707,30 @@
 
     const BOARD_VALIDATION = validateBoard(BOARD);
 
+    function resolveGeometryConfig(board, isCompact){
+      const geometry = board?.geometry || {};
+      const stadium = geometry.stadium || {};
+      const visuals = geometry.visuals || {};
+      const legacyVisuals = geometry.trackLabels || {};
+      const legacyChevrons = geometry.chevrons || {};
+      const toInt = (value, fallback)=>{
+        const parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      };
+      return Object.freeze({
+        stadiumWidth: toInt(stadium.width, 780),
+        stadiumHeight: toInt(stadium.height, 560),
+        cornerRadius: toInt(stadium.cornerRadius, 120),
+        trackLabelEvery: Math.max(1, toInt(visuals.trackLabelEvery ?? legacyVisuals.every, 5)),
+        chevronInterval: Math.max(1, toInt(
+          isCompact
+            ? (visuals.chevronIntervalCompact ?? legacyChevrons.compact)
+            : (visuals.chevronIntervalDesktop ?? legacyChevrons.desktop),
+          2
+        ))
+      });
+    }
+
     const COLOR_MARKERS = Object.freeze({
       red:{shape:'triangle',symbol:'▲',label:'紅'},
       blue:{shape:'square',symbol:'■',label:'藍'},
@@ -2501,11 +2525,11 @@
       const tileBorderColor=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.72);
       const rad=(deg)=>deg*Math.PI/180;
       const trackRadius=r-20;
-      const geomPreset=window.GameRules?.BOARD?.geometry?.stadium||{};
+      const geometryCfg=resolveGeometryConfig(window.GameRules?.BOARD, isCompact);
       const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
-      const stadiumWidthBase=Number(geomPreset.width)||780;
-      const stadiumHeightBase=Number(geomPreset.height)||560;
-      const cornerRadiusBase=Number(geomPreset.cornerRadius)||120;
+      const stadiumWidthBase=geometryCfg.stadiumWidth;
+      const stadiumHeightBase=geometryCfg.stadiumHeight;
+      const cornerRadiusBase=geometryCfg.cornerRadius;
       const STADIUM_W=clamp(stadiumWidthBase,isCompact?720:760,840);
       const STADIUM_H=clamp(stadiumHeightBase,isCompact?500:540,620);
       const STADIUM_R=clamp(cornerRadiusBase,96,156);
@@ -2664,10 +2688,8 @@
         });
         return fallback;
       })();
-      const visualCfg=window.GameRules?.BOARD?.geometry?.visuals||{};
-      const trackLabelEvery=Math.max(1,parseInt(visualCfg.trackLabelEvery,10)||5);
-      const chevronIntervalRaw=isCompact?visualCfg.chevronIntervalCompact:visualCfg.chevronIntervalDesktop;
-      const chevronInterval=Math.max(1,parseInt(chevronIntervalRaw,10)||2);
+      const trackLabelEvery=geometryCfg.trackLabelEvery;
+      const chevronInterval=geometryCfg.chevronInterval;
       const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
       const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
       const chevronData=[];
