@@ -31,6 +31,8 @@
     body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";background:var(--bg);color:var(--fg);transition:background .18s ease,color .18s ease}
     .container{max-width:1200px;margin:0 auto;padding:16px}
     .app-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .nav-list{list-style:none;display:flex;gap:8px;padding:0;margin:0}
+    .nav-list li{display:flex}
     .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:14px;border:1px solid #1f2937;background:#111827;color:#e5e7eb;cursor:pointer}
     .btn[disabled]{opacity:.5;cursor:not-allowed}
     .grid{display:grid;gap:16px}
@@ -100,6 +102,8 @@
     legend{padding:0 8px}
     label{display:flex;align-items:center;gap:8px}
     .row{display:flex;gap:8px;flex-wrap:wrap}
+    .panel-section{margin-top:12px}
+    .panel-section > .section-title{font-size:1rem}
     #preset-options{align-items:stretch}
     .preset-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:180px;padding:12px;border-radius:12px;border:1px solid #1f2937;background:rgba(15,23,42,0.6);cursor:pointer;transition:border-color .18s ease,background .18s ease}
     .preset-card:hover{border-color:rgba(34,211,238,0.45)}
@@ -222,9 +226,11 @@
       <span class="muted">MVP</span>
     </div>
     <nav aria-label="global">
-      <button class="btn" id="btn-lobby" type="button">返回大廳</button>
-      <button class="btn" id="btn-settings" type="button" aria-haspopup="dialog" aria-controls="dialog-settings">設定</button>
-      <button class="btn" id="btn-about" type="button" aria-haspopup="dialog" aria-controls="dialog-about">說明</button>
+      <ul class="nav-list">
+        <li><button class="btn" id="btn-lobby" type="button">返回大廳</button></li>
+        <li><button class="btn" id="btn-settings" type="button" aria-haspopup="dialog" aria-controls="dialog-settings">設定</button></li>
+        <li><button class="btn" id="btn-about" type="button" aria-haspopup="dialog" aria-controls="dialog-about">說明</button></li>
+      </ul>
     </nav>
   </header>
 
@@ -373,23 +379,23 @@
           <button class="btn" id="btn-roll" type="button" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
           <output id="dice-output" aria-live="polite" class="pill" role="status">–</output>
         </div>
-        <div style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">可移動棋子</h3>
+        <section class="panel-section" aria-labelledby="movables-title">
+          <h3 id="movables-title" class="section-title">可移動棋子</h3>
           <div id="movables" class="list" aria-live="polite"></div>
-        </div>
+        </section>
         <div id="toast-host" aria-live="polite"></div>
         <div id="hint-card" aria-live="polite"></div>
         <section id="last-move-card" aria-live="polite" data-empty="true">
-          <h3 class="section-title" style="font-size:1rem">上一步動作</h3>
+          <h3 class="section-title">上一步動作</h3>
           <p id="last-move-summary" class="muted">尚未有移動記錄。</p>
           <p id="last-move-meta" class="last-move-meta"></p>
           <ul id="last-move-captured"></ul>
           <button class="btn" type="button" id="btn-replay-last" disabled aria-disabled="true">重播上一步</button>
         </section>
-        <div style="margin-top:12px">
-          <h3 class="section-title" style="font-size:1rem">戰報</h3>
+        <section class="panel-section" aria-labelledby="log-title">
+          <h3 id="log-title" class="section-title">戰報</h3>
           <div id="log" class="log" role="log" aria-live="polite"></div>
-        </div>
+        </section>
         <div class="row" style="margin-top:12px">
           <button class="btn" id="btn-undo" type="button">Undo</button>
           <button class="btn" id="btn-restart" type="button">重開局</button>
@@ -582,7 +588,11 @@
           green:[{from:43,to:4},{from:47,to:8}],
         } }
       },
-      bases:{ perPlayer:4 }
+      bases:{ perPlayer:4 },
+      geometry:{
+        stadium:{ width:780, height:560, cornerRadius:120 },
+        visuals:{ chevronIntervalDesktop:2, chevronIntervalCompact:3, trackLabelEvery:5 }
+      }
     };
 
     function buildOwnColorJumpData(board){
@@ -2491,8 +2501,15 @@
       const tileBorderColor=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.72);
       const rad=(deg)=>deg*Math.PI/180;
       const trackRadius=r-20;
-      const STADIUM_W=780,STADIUM_H=560,STADIUM_R=120;
-      const hw=STADIUM_W/2,hh=STADIUM_H/2,irx=hw-STADIUM_R,iry=hh-STADIUM_R;
+      const geomPreset=window.GameRules?.BOARD?.geometry?.stadium||{};
+      const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+      const stadiumWidthBase=Number(geomPreset.width)||780;
+      const stadiumHeightBase=Number(geomPreset.height)||560;
+      const cornerRadiusBase=Number(geomPreset.cornerRadius)||120;
+      const STADIUM_W=clamp(stadiumWidthBase,isCompact?720:760,840);
+      const STADIUM_H=clamp(stadiumHeightBase,isCompact?500:540,620);
+      const STADIUM_R=clamp(cornerRadiusBase,96,156);
+      const hw=STADIUM_W/2,hh=STADIUM_H/2,irx=Math.max(40,hw-STADIUM_R),iry=Math.max(40,hh-STADIUM_R);
       const trackSegments=[
         {type:'line',len:2*irx,a:{x:-irx,y:-hh},b:{x: irx,y:-hh}},
         {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y:-iry},r:STADIUM_R,th0:-Math.PI/2,th1:0},
@@ -2647,6 +2664,10 @@
         });
         return fallback;
       })();
+      const visualCfg=window.GameRules?.BOARD?.geometry?.visuals||{};
+      const trackLabelEvery=Math.max(1,parseInt(visualCfg.trackLabelEvery,10)||5);
+      const chevronIntervalRaw=isCompact?visualCfg.chevronIntervalCompact:visualCfg.chevronIntervalDesktop;
+      const chevronInterval=Math.max(1,parseInt(chevronIntervalRaw,10)||2);
       const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
       const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
       const chevronData=[];
@@ -2733,7 +2754,7 @@
           if(diff<cardinalBest[ci].delta){ cardinalBest[ci]={idx:i,delta:diff}; }
         });
         const hudStatic=this._hudLayers?.static;
-        if(hudStatic && i%5===0){
+        if(hudStatic && i%trackLabelEvery===0){
           const {nx,ny}=normalFromAngle(tangent);
           const outward={x:-nx,y:-ny};
           const tickDist=hudTrackOutset;
@@ -2747,6 +2768,7 @@
       if(hudStatic){
         const chevronGroup=el('g',{class:'tile-chevron-group'});
         chevronData.forEach(({x,y,angle,idx})=>{
+          if(!cardinalSet.has(idx) && (idx%chevronInterval!==0)) return;
           const size=cardinalSet.has(idx)?18:10;
           drawChevron(chevronGroup,x,y,angle,size);
         });
@@ -2961,6 +2983,32 @@
           issues.push(`入家終點離中心距離差異過大（最大差 ${spread.toFixed(1)}）`);
         }
       }
+      const baseCenters=geom?.baseCenters||{};
+      Object.entries(baseCenters).forEach(([color,center])=>{
+        if(!center) return;
+        const nearest=track.reduce((best,node)=>{
+          if(!node) return best;
+          const d=Math.hypot(node.x-center.x,node.y-center.y);
+          return d<best?d:best;
+        },Infinity);
+        if(Number.isFinite(nearest) && nearest<120){
+          issues.push(`${color} 基地距離外圈過近（最短 ${nearest.toFixed(1)}）`);
+        }
+      });
+      const runways=geom?.runway||{};
+      Object.entries(runways).forEach(([color,tiles])=>{
+        if(!Array.isArray(tiles) || tiles.length===0) return;
+        const first=tiles[0];
+        if(!first) return;
+        const minTrackDist=track.reduce((best,node)=>{
+          if(!node) return best;
+          const d=Math.hypot(node.x-first.x,node.y-first.y);
+          return d<best?d:best;
+        },Infinity);
+        if(Number.isFinite(minTrackDist) && minTrackDist<46){
+          issues.push(`${color} 起飛滑行道離外圈過近（最短 ${minTrackDist.toFixed(1)}）`);
+        }
+      });
       return {ok:issues.length===0,issues};
     },
     clearGhostPath(){
