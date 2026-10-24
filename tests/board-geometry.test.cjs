@@ -34,3 +34,20 @@ test('reject incompatible game metadata',()=>{
   assert.throws(()=>Geometry.create({...board,track:{...board.track,length:56}}),/52 track/);
   assert.throws(()=>Geometry.create({...board,homeLane:{...board.homeLane,entryIndex:{...board.homeLane.entryIndex,red:49}}}),/entry index/);
 });
+
+test('runway markers do not cover takeoff tiles or parked aircraft',()=>{
+  const geom=Geometry.create(board);
+  const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  for(const color of Geometry.COLORS){
+    const taxi=geom.runway[color];
+    assert.equal(taxi.length,2);
+    const start=geom.track[board.track.startIndex[color]];
+    for(const marker of taxi){
+      assert.ok(distance(marker,start)>36,color+' taxi overlaps the takeoff tile');
+      for(const slot of geom.bases[color]){
+        assert.ok(distance(marker,slot)>36,color+' taxi overlaps a parked aircraft');
+      }
+    }
+    assert.ok(distance(taxi[0],taxi[1])>26,color+' taxi markers overlap');
+  }
+});
