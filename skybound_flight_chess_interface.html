@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Skybound Flight Chess Interface</title>
   <link rel="stylesheet" href="styles/game.css">
+  <link rel="stylesheet" href="styles/visibility.css">
 </head>
 <body>
   <a class="sr-only" href="#app">跳到主要內容</a>
@@ -263,10 +264,10 @@
       <section aria-label="基本規則" style="margin-top:8px">
         <h4 class="section-title" style="font-size:1rem;margin:0">基本規則</h4>
         <ul class="info-list">
-          <li>擲到 6 才能讓基地中的飛機起飛，並獲得追加擲骰機會。</li>
-          <li>飛機依擲出的點數沿著外圈軌道前進；同色可疊在一起行動。</li>
+          <li>起飛條件依規則設定：經典需擲 6，速戰需擲 5 或 6，預設自訂及親子為偶數。</li>
+          <li>飛機依擲出的點數沿外圈前進；是否疊子及合體移動，依自訂規則設定。</li>
           <li>落在對手單獨佔據的格子可將其打回基地，但安全格除外。</li>
-          <li>進入己方家路時需剛好踏入；超出的處理方式依規則設定。</li>
+          <li>每前進一格消耗一點；家路精準進入及終點超出的處理方式，依規則設定。</li>
         </ul>
         <p class="muted" style="margin:8px 0 0">勝利條件：最先把所有飛機降落終點，即獲勝。</p>
       </section>

@@ -1,0 +1,2 @@
+/* Grid/flex utilities must not override native hidden state. */
+[hidden] { display: none !important; }

@@ -41,7 +41,9 @@ jobs:
           python -m pip install -r tests/requirements.txt
           python -m playwright install --with-deps chromium
       - name: Chromium interactions, real persistence and twenty complete games
-        run: python tests/browser_regression.py 2>&1 | tee test-results/browser-tests.log
+        run: |
+          python tests/browser_regression.py 2>&1 | tee test-results/browser-tests.log
+          python tests/browser_visibility.py 2>&1 | tee test-results/visibility-tests.log
       - name: Retain logs and actual browser screenshots
         if: always()
         uses: actions/upload-artifact@v4

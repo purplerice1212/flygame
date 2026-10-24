@@ -34,7 +34,7 @@ jobs:
           npm run build
           python -m pip install -r tests/requirements.txt
           python -m playwright install --with-deps chromium
-          python tests/browser_regression.py
+          npm run test:browser
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
