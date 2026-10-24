@@ -542,6 +542,7 @@
     </div>
   </template>
 
+  <script src="board-geometry.js"></script>
   <!-- 5) App Script -->
   <script>
   // =========================== Rules Engine ============================
@@ -2483,490 +2484,80 @@
       const colorMarkers=window.GameRules?.COLOR_MARKERS||{};
       const markerForColor=(col)=>colorMarkers[col]||null;
       const markerSymbol=(col)=>markerForColor(col)?.symbol||'●';
-      const geom=this.geom={track:[],home:{},bases:{},runway:{},finishedSlots:{},baseCenters:{},runwayEntry:{}};
-      const isCompact=window.matchMedia('(max-width: 959px)').matches;
-      const tileSize=isCompact?40:44;
-      const hudSafetyMargin=isCompact?24:28;
-      const hudTrackOutset=tileSize/2+hudSafetyMargin;
-      const quadrantLabelOutset=hudTrackOutset+18;
-      const parseHex=(hex)=>{ const h=hex.replace('#',''); const parts=h.length===3?h.split('').map(c=>parseInt(c+c,16)):h.match(/.{2}/g).map(v=>parseInt(v,16)); return{r:parts[0],g:parts[1],b:parts[2]}; };
-      const mixWithWhite=(hex,amount)=>{ const {r,g,b}=parseHex(hex); const mix=c=>Math.round(c+(255-c)*amount); return`rgb(${mix(r)},${mix(g)},${mix(b)})`; };
-      const withAlpha=(hex,alpha)=>{ const {r,g,b}=parseHex(hex); return`rgba(${r},${g},${b},${alpha})`; };
-      const tileBaseFill=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.28);
-      const tileBorderColor=withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.72);
-      const rad=(deg)=>deg*Math.PI/180;
-      const trackRadius=r-20;
-      const STADIUM_W=780,STADIUM_H=560,STADIUM_R=120;
-      const hw=STADIUM_W/2,hh=STADIUM_H/2,irx=hw-STADIUM_R,iry=hh-STADIUM_R;
-      const trackSegments=[
-        {type:'line',len:2*irx,a:{x:-irx,y:-hh},b:{x: irx,y:-hh}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y:-iry},r:STADIUM_R,th0:-Math.PI/2,th1:0},
-        {type:'line',len:2*iry,a:{x: hw,y:-iry},b:{x: hw,y: iry}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x: irx,y: iry},r:STADIUM_R,th0:0,th1:Math.PI/2},
-        {type:'line',len:2*irx,a:{x: irx,y: hh},b:{x:-irx,y: hh}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x:-irx,y: iry},r:STADIUM_R,th0:Math.PI/2,th1:Math.PI},
-        {type:'line',len:2*iry,a:{x:-hw,y: iry},b:{x:-hw,y:-iry}},
-        {type:'arc',len:Math.PI/2*STADIUM_R,c:{x:-irx,y:-iry},r:STADIUM_R,th0:Math.PI,th1:3*Math.PI/2},
-      ];
-      const trackPerimeter=trackSegments.reduce((sum,segment)=>sum+segment.len,0);
-      const stadiumPoint=(t)=>{
-        let s=(t-Math.floor(t))*trackPerimeter;
-        for(const g of trackSegments){
-          if(s<=g.len){
-            if(g.type==='line'){
-              const u=s/g.len,dx=g.b.x-g.a.x,dy=g.b.y-g.a.y;
-              const x=g.a.x+dx*u,y=g.a.y+dy*u;
-              const tangent=Math.atan2(dy,dx);
-              return{ x:cx+x,y:cy+y,tangent };
-            }else{
-              const u=s/g.len,th=g.th0+(g.th1-g.th0)*u;
-              const x=g.c.x+g.r*Math.cos(th),y=g.c.y+g.r*Math.sin(th);
-              const tangent=th+Math.PI/2;
-              return{ x:cx+x,y:cy+y,tangent };
-            }
-          }
-          s-=g.len;
-        }
-        return{ x:cx,y:cy-hh,tangent:Math.PI/2 };
+      const geom=this.geom=window.BoardGeometry.create(window.GameRules.BOARD);
+      const tileSize=geom.tileSize;
+      const board=window.GameRules.BOARD;
+      const specials=window.GameRules.SPECIAL_BY_IDX||{};
+      const jumps=board.special.ownColorJump.lookupByIndex||{};
+      const starts=board.track.startIndex;
+      const colors=['red','blue','yellow','green'];
+      const palette=Object.fromEntries(colors.map(c=>[c,color('--'+c)||'#38bdf8']));
+      const rgba=(hex,alpha)=>{
+        const h=(hex||'#38bdf8').replace('#','');
+        if(!/^[\da-f]{6}$/i.test(h)) return 'rgba(56,189,248,'+alpha+')';
+        return 'rgba('+[0,2,4].map(i=>parseInt(h.slice(i,i+2),16)).join(',')+','+alpha+')';
       };
-      const normalFromAngle=(a)=>({nx:-Math.sin(a),ny:Math.cos(a)});
-      const arcPath=(centerX,centerY,rInner,rOuter,startDeg,endDeg)=>{
-        const startRad=rad(startDeg);
-        const endRad=rad(endDeg);
-        const outerStart={x:centerX+Math.cos(startRad)*rOuter,y:centerY+Math.sin(startRad)*rOuter};
-        const outerEnd={x:centerX+Math.cos(endRad)*rOuter,y:centerY+Math.sin(endRad)*rOuter};
-        const innerEnd={x:centerX+Math.cos(endRad)*rInner,y:centerY+Math.sin(endRad)*rInner};
-        const innerStart={x:centerX+Math.cos(startRad)*rInner,y:centerY+Math.sin(startRad)*rInner};
-        const sweep=Math.abs(endDeg-startDeg)>180?1:0;
-        return`M ${outerStart.x} ${outerStart.y} A ${rOuter} ${rOuter} 0 ${sweep} 1 ${outerEnd.x} ${outerEnd.y} L ${innerEnd.x} ${innerEnd.y} A ${rInner} ${rInner} 0 ${sweep} 0 ${innerStart.x} ${innerStart.y} Z`;
+      const label=(parent,x,y,value,size=13,fill='#f8fafc')=>{
+        parent.appendChild(el('text',{x,y,'text-anchor':'middle','dominant-baseline':'central','font-size':size,'font-weight':'700',fill,'pointer-events':'none'},[document.createTextNode(String(value))]));
       };
-      const starPoints=(centerX,centerY,outer,inner)=>{
-        const pts=[];
-        for(let i=0;i<10;i++){
-          const angle=(Math.PI/2)+(i*Math.PI/5);
-          const radius=(i%2===0)?outer:inner;
-          const px=centerX+Math.cos(angle)*radius;
-          const py=centerY-Math.sin(angle)*radius;
-          pts.push(`${px},${py}`);
-        }
-        return pts.join(' ');
-      };
-      const drawChevron=(group,x,y,a,size=10)=>{
-        const length=size*1.6;
-        const tail=size*0.9;
-        const tipX=x+Math.cos(a)*length;
-        const tipY=y+Math.sin(a)*length;
-        const tailX=x-Math.cos(a)*tail;
-        const tailY=y-Math.sin(a)*tail;
-        const normalX=-Math.sin(a);
-        const normalY=Math.cos(a);
-        const width=size*0.7;
-        const base1X=tailX+normalX*width;
-        const base1Y=tailY+normalY*width;
-        const base2X=tailX-normalX*width;
-        const base2Y=tailY-normalY*width;
-        group.appendChild(el('line',{x1:tailX,y1:tailY,x2:tipX,y2:tipY,stroke:'rgba(255,255,255,0.32)','stroke-width':2.2,'stroke-linecap':'round'}));
-        group.appendChild(el('polygon',{points:`${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`,fill:'rgba(255,255,255,0.7)'}));
-      };
-      const drawQuadrant=(startDeg,endDeg,colorHex,label)=>{
-        if(gBack){
-          const path=arcPath(cx,cy,trackRadius-50,trackRadius+46,startDeg,endDeg);
-          gBack.appendChild(el('path',{d:path,fill:withAlpha(colorHex,0.08)}));
-        }
-        const hudStatic=this._hudLayers?.static;
-        if(hudStatic){
-          const mid=(startDeg+endDeg)/2;
-          const rx=cx+Math.cos(rad(mid))*(trackRadius+quadrantLabelOutset);
-          const ry=cy+Math.sin(rad(mid))*(trackRadius+quadrantLabelOutset);
-          hudStatic.appendChild(el('text',{x:rx,y:ry,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(colorHex,0.38),'font-weight':'600'},[document.createTextNode(label)]));
-        }
-      };
-      const tooltipFor=(info)=>{
-        if(!info) return '';
-        const colorLabel={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
-        if(info.type==='safe') return '安全格：不可被吃';
-        if(info.type==='start'){
-          const marker=markerForColor(info.color);
-          const suffix=marker?.symbol?`（${marker.symbol}）`:'';
-          return `${colorLabel[info.color]||''} 起飛格${suffix}`;
-        }
-        if(info.type==='jump') return `${colorLabel[info.color]||''} 跳格入口`;
-        if(info.type==='portal'){
-          if(info.color) return `傳送門 ${info.label}（${colorLabel[info.color]||info.color} 專用）：${info.from} → ${info.to}`;
-          return `傳送門 ${info.label}: ${info.from} → ${info.to}`;
-        }
-        if(info.type==='power'){
-          if(info.effect==='extra-roll') return '增益：再擲一次';
-          if(info.effect==='advance-2') return '增益：前進 2 格';
-          if(info.effect==='command-other') return '增益：指揮其他棋 +1';
-          return '增益格';
-        }
-        if(info.type==='trap'){
-          if(info.effect==='skip-turn') return '陷阱：下回合停飛';
-          return '陷阱格';
-        }
-        return '';
-      };
-      if(gBack){
-        gBack.appendChild(el('circle',{cx,cy,r:r+60,fill:withAlpha(ensureColor(color('--bg'),'#0a0a0a'),0.88),stroke:withAlpha(ensureColor(color('--tile-grid'),'#1f2937'),0.4),'stroke-width':2}));
-      }
-      const quadrants=[
-        {label:'R',color:color('--red'),start:-135,end:-45},
-        {label:'B',color:color('--blue'),start:-45,end:45},
-        {label:'Y',color:color('--yellow'),start:45,end:135},
-        {label:'G',color:color('--green'),start:135,end:225}
-      ];
-      quadrants.forEach(q=>drawQuadrant(q.start,q.end,q.color,q.label));
-      const total=window.GameRules.BOARD.track.length; const startIdx=window.GameRules.BOARD.track.startIndex; const entryIdx=window.GameRules.BOARD.homeLane.entryIndex; const ownJumpData=window.GameRules.BOARD.special.ownColorJump||{};
-      const trackOffsetNormalized=(trackSegments[0].len/2)/trackPerimeter;
-      const trackOffsetTiles=trackOffsetNormalized*total;
-      const points=new Array(total);
-      for(let i=0;i<total;i++) points[i]=stadiumPoint((i+trackOffsetTiles)/total);
-      const specials=window.GameRules.BOARD.special||{};
-      const safeExtras=new Set((specials.safeTiles?.extra)||[]);
-      const specialByIdx=window.GameRules.SPECIAL_BY_IDX||{};
-      const portalPairs=new Map();
-      (specials.portals||[]).forEach(p=>{
-        if(!p || !p.label) return;
-        const key=p.color?`${p.label}-${p.color}`:p.label;
-        if(!portalPairs.has(key)) portalPairs.set(key,{label:p.label,color:p.color||null,indices:new Set()});
-        const entry=portalPairs.get(key);
-        entry.indices.add(p.from);
-        entry.indices.add(p.to);
+      gBack.appendChild(el('rect',{x:65,y:65,width:870,height:870,rx:22,fill:'rgba(22,33,51,.88)',stroke:'rgba(148,163,184,.35)','stroke-width':2}));
+      geom.track.forEach((p,i)=>{
+        const startColor=colors.find(c=>starts[c]===i);
+        const jumpColor=jumps[i];
+        const tint=palette[startColor||jumpColor];
+        const spec=specials[i];
+        const group=el('g',{transform:'translate('+p.x+' '+p.y+')','data-track-index':i});
+        group.appendChild(el('rect',{x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:5,fill:tint?rgba(tint,.25):'rgba(148,163,184,.14)',stroke:tint||'rgba(148,163,184,.58)','stroke-width':tint?2.5:1.4}));
+        if(startColor) label(group,0,0,markerSymbol(startColor),19,palette[startColor]);
+        else if(spec) label(group,0,0,spec.type==='trap'?'⚠':spec.type==='power'?'🎲':spec.type==='portal'?(spec.label||'◎'):i,15);
+        else if((board.special.safeTiles.extra||[]).includes(i)) group.appendChild(el('circle',{r:11,fill:'none',stroke:'#bde8ff','stroke-width':2}));
+        else label(group,0,0,i,10,'rgba(225,232,245,.75)');
+        const title=el('title');title.textContent='Track '+i;group.appendChild(title);
+        gTiles.appendChild(group);
       });
-      const jumpPatterns={};
-      const ensureJumpPattern=(col)=>{
-        if(jumpPatterns[col]) return jumpPatterns[col];
-        const hex=color(`--${col}`);
-        const pattern=el('pattern',{id:`jump-${col}`,patternUnits:'userSpaceOnUse',width:10,height:10});
-        pattern.appendChild(el('rect',{width:10,height:10,fill:withAlpha(hex,0.12)}));
-        pattern.appendChild(el('circle',{cx:3,cy:3,r:1.4,fill:withAlpha(hex,0.35)}));
-        pattern.appendChild(el('circle',{cx:8,cy:8,r:1.2,fill:withAlpha(hex,0.28)}));
-        defs.appendChild(pattern); jumpPatterns[col]=pattern; return pattern;
-      };
-      const ownJumpLookup = ownJumpData.lookupByIndex || (()=>{
-        const fallback={};
-        Object.entries(ownJumpData.indices||{}).forEach(([col,arr])=>{
-          if(!Array.isArray(arr)) return;
-          arr.forEach(idx=>{ fallback[idx]=col; });
+      for(const col of colors){
+        const hue=palette[col],base=geom.baseCenters[col],half=geom.baseSize/2;
+        gGrid.appendChild(el('rect',{x:base.x-half,y:base.y-half,width:geom.baseSize,height:geom.baseSize,rx:22,fill:rgba(hue,.1),stroke:rgba(hue,.7),'stroke-width':2.5}));
+        geom.bases[col].forEach((p,i)=>{
+          gGrid.appendChild(el('circle',{cx:p.x,cy:p.y,r:24,fill:rgba(hue,.2),stroke:hue,'stroke-width':2}));
+          label(gGrid,p.x,p.y,i+1,13,hue);
         });
-        return fallback;
-      })();
-      const startIndexByColor=Object.fromEntries(Object.entries(startIdx).map(([col,idx])=>[idx,col]));
-      const entryIndexByColor=Object.fromEntries(Object.entries(entryIdx).map(([col,idx])=>[idx,col]));
-      const chevronData=[];
-      const cardinalTargets=[0,90,180,270];
-      const cardinalBest=cardinalTargets.map(()=>({idx:-1,delta:Infinity}));
-      for(let i=0;i<total;i++){
-        const {x,y,tangent}=points[i];
-        geom.track[i]={x,y,angle:tangent};
-        const tangentDeg=tangent*180/Math.PI;
-        const gTile=el('g',{transform:`translate(${x} ${y})`});
-        const borderGroup=el('g',{transform:`rotate(${tangentDeg})`});
-        const baseAttrs={x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:tileBaseFill,stroke:tileBorderColor,'stroke-width':2};
-        const jumpCol=ownJumpLookup[i];
-        if(jumpCol){ const hex=ensureColor(color(`--${jumpCol}`),'#38bdf8'); baseAttrs.fill=mixWithWhite(hex,0.16); baseAttrs.stroke=withAlpha(hex,0.65); baseAttrs['stroke-width']=2.5; }
-        borderGroup.appendChild(el('rect',baseAttrs));
-        if(jumpCol){ ensureJumpPattern(jumpCol); borderGroup.appendChild(el('rect',{x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:10,fill:`url(#jump-${jumpCol})`,opacity:0.45})); }
-        gTile.appendChild(borderGroup);
-        const gIcon=el('g',{transform:'rotate(0)'});
-        gTile.appendChild(gIcon);
-        gTiles.appendChild(gTile);
-        const specialEntry=specialByIdx[i];
-        const startColor=startIndexByColor[i];
-        const isSafeExtra=safeExtras.has(i);
-        if(isSafeExtra){
-          gIcon.appendChild(el('circle',{r:tileSize*0.38,class:'tile-icon tile-ring',stroke:'#BEE3F8'}));
-        }
-        if(startColor){
-          const hex=ensureColor(color(`--${startColor}`),'#38bdf8');
-          gIcon.appendChild(el('circle',{r:tileSize*0.36,fill:withAlpha(hex,0.28),stroke:withAlpha(hex,0.85),'stroke-width':2.6}));
-          const marker=markerForColor(startColor);
-          const shapeSize=tileSize*0.34;
-          const strokeColor='#0b0f14';
-          if(marker?.shape==='triangle'){
-            gIcon.appendChild(el('path',{d:`M 0 ${-shapeSize*0.6} L ${shapeSize*0.52} ${shapeSize*0.6} L ${-shapeSize*0.52} ${shapeSize*0.6} Z`,fill:hex,stroke:strokeColor,'stroke-width':1.6,'stroke-linejoin':'round'}));
-          }else if(marker?.shape==='square'){
-            const side=shapeSize*0.9;
-            gIcon.appendChild(el('rect',{x:-side/2,y:-side/2,width:side,height:side,rx:4,fill:hex,stroke:strokeColor,'stroke-width':1.6}));
-          }else if(marker?.shape==='diamond'){
-            const diag=shapeSize*0.75;
-            gIcon.appendChild(el('path',{d:`M 0 ${-diag} L ${diag} 0 L 0 ${diag} L ${-diag} 0 Z`,fill:hex,stroke:strokeColor,'stroke-width':1.6,'stroke-linejoin':'round'}));
-          }else if(marker?.shape==='cross'){
-            const arm=shapeSize*0.28;
-            const half=shapeSize*0.72;
-            const points=[
-              {x:-arm,y:-half},{x:arm,y:-half},{x:arm,y:-arm},{x:half,y:-arm},
-              {x:half,y:arm},{x:arm,y:arm},{x:arm,y:half},{x:-arm,y:half},
-              {x:-arm,y:arm},{x:-half,y:arm},{x:-half,y:-arm},{x:-arm,y:-arm}
-            ];
-            const d=['M',`${points[0].x} ${points[0].y}`];
-            for(let idx=1;idx<points.length;idx++){ d.push('L',`${points[idx].x} ${points[idx].y}`); }
-            d.push('Z');
-            gIcon.appendChild(el('path',{d:d.join(' '),fill:hex,stroke:strokeColor,'stroke-width':1.6,'stroke-linejoin':'round'}));
-          }else{
-            gIcon.appendChild(el('circle',{r:shapeSize*0.48,fill:hex,stroke:strokeColor,'stroke-width':1.6}));
-          }
-        }
-        if(specialEntry?.type==='trap'){
-          gIcon.appendChild(el('rect',{x:-8,y:-8,width:16,height:16,transform:'rotate(45)',fill:'rgba(255,95,109,.25)',stroke:'rgba(255,95,109,.9)',class:'tile-icon'}));
-        }else if(specialEntry?.type==='power'){
-          gIcon.appendChild(el('circle',{r:5,fill:'rgba(255,255,255,.9)'}));
-          gIcon.appendChild(el('circle',{r:tileSize*0.32,class:'tile-icon tile-ring',stroke:'rgba(255,255,255,.82)'}));
-        }else if(specialEntry?.type==='portal'){
-          const accentBase=ensureColor(specialEntry.color?color(`--${specialEntry.color}`):color('--accent'),'#38bdf8');
-          const stroke=withAlpha(accentBase,0.9);
-          const fill=specialEntry.color?withAlpha(accentBase,0.24):'none';
-          const textFill=specialEntry.color?'#0b0f14':'#fff';
-          gIcon.appendChild(el('circle',{r:tileSize*0.34,class:'tile-icon',stroke,fill}));
-          gIcon.appendChild(el('text',{y:1,'text-anchor':'middle','dominant-baseline':'central','font-weight':'700','font-size':14,'fill':textFill},[document.createTextNode(specialEntry.label||'●')]));
-        }
-        const tooltipCandidates=[];
-        if(specialEntry) tooltipCandidates.push(tooltipFor(specialEntry));
-        if(isSafeExtra) tooltipCandidates.push(tooltipFor({type:'safe'}));
-        if(startColor) tooltipCandidates.push(tooltipFor({type:'start',color:startColor}));
-        if(jumpCol) tooltipCandidates.push(tooltipFor({type:'jump',color:jumpCol}));
-        const tooltipText=tooltipCandidates.find(Boolean);
-        if(tooltipText){
-          gIcon.appendChild(el('title',{},[document.createTextNode(tooltipText)]));
-        }
-        chevronData.push({x,y,angle:tangent,idx:i});
-        const normDeg=(tangent*180/Math.PI+360)%360;
-        cardinalTargets.forEach((target,ci)=>{
-          const rawDiff=Math.abs(normDeg-target);
-          const diff=Math.min(rawDiff,360-rawDiff);
-          if(diff<cardinalBest[ci].delta){ cardinalBest[ci]={idx:i,delta:diff}; }
+        label(gGrid,base.x,base.y,col.toUpperCase(),17,hue);
+        geom.home[col].forEach((p,i)=>{
+          const group=el('g',{transform:'translate('+p.x+' '+p.y+')','data-home-color':col,'data-home-index':i});
+          group.appendChild(el('rect',{x:-tileSize/2,y:-tileSize/2,width:tileSize,height:tileSize,rx:5,fill:rgba(hue,i===5?.8:.28),stroke:hue,'stroke-width':2}));
+          label(group,0,0,i===5?'★':i+1,i===5?20:13);
+          gTiles.appendChild(group);
         });
-        const hudStatic=this._hudLayers?.static;
-        if(hudStatic && i%5===0){
-          const {nx,ny}=normalFromAngle(tangent);
-          const outward={x:-nx,y:-ny};
-          const tickDist=hudTrackOutset;
-          const tx=x+outward.x*tickDist;
-          const ty=y+outward.y*tickDist;
-          hudStatic.appendChild(el('text',{x:tx,y:ty,'text-anchor':'middle','dominant-baseline':'central','font-size':10,'fill':'rgba(255,255,255,.7)'},[document.createTextNode(String(i))]));
+      }
+      const quarters=[
+        ['red','500,500 456,456 456,544'],
+        ['blue','500,500 456,456 544,456'],
+        ['yellow','500,500 544,456 544,544'],
+        ['green','500,500 456,544 544,544']
+      ];
+      quarters.forEach(([col,points])=>gSpecials.appendChild(el('polygon',{points,fill:rgba(palette[col],.78)})));
+      const paths=el('g',{'class':'board-special-paths','pointer-events':'none'});
+      for(const [col,edges] of Object.entries(board.special.flightPaths.edges||{})){
+        for(const edge of edges){
+          const p=geom.track[edge.from],q=geom.track[edge.to];
+          if(p&&q)paths.appendChild(el('line',{x1:p.x,y1:p.y,x2:q.x,y2:q.y,stroke:palette[col],opacity:.46,'stroke-width':3,'stroke-dasharray':'7 8'}));
         }
       }
-      const cardinalSet=new Set(cardinalBest.map(entry=>entry.idx).filter(idx=>idx>=0));
-      const hudStatic=this._hudLayers?.static;
-      if(hudStatic){
-        const chevronGroup=el('g',{class:'tile-chevron-group'});
-        chevronData.forEach(({x,y,angle,idx})=>{
-          const size=cardinalSet.has(idx)?18:10;
-          drawChevron(chevronGroup,x,y,angle,size);
-        });
-        hudStatic.appendChild(chevronGroup);
+      for(const portal of board.special.portals||[]){
+        if(portal.from>portal.to)continue;
+        const p=geom.track[portal.from],q=geom.track[portal.to];
+        if(p&&q)paths.appendChild(el('line',{x1:p.x,y1:p.y,x2:q.x,y2:q.y,stroke:'#77def1',opacity:.3,'stroke-width':2,'stroke-dasharray':'4 9'}));
       }
-      if(portalPairs.size>0){
-        const portalLines=el('g',{opacity:0.55});
-        const colorLabelMap={red:'紅',blue:'藍',yellow:'黃',green:'綠'};
-        portalPairs.forEach(({indices,label,color:portalColor})=>{
-          const points=Array.from(indices).map(idx=>geom.track[idx]).filter(Boolean);
-          if(points.length>=2){
-            const [p1,p2]=points;
-            const portalBase=ensureColor(portalColor?color(`--${portalColor}`):color('--accent'),'#38bdf8');
-            const strokeColor=withAlpha(portalBase,0.85);
-            portalLines.appendChild(el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:strokeColor,'stroke-dasharray':'8 6','stroke-width':2.6,'stroke-linecap':'round'}));
-            const mid={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
-            const textColor=portalColor?strokeColor:portalBase;
-            const suffix=portalColor?`·${colorLabelMap[portalColor]||portalColor}`:'';
-            portalLines.appendChild(el('text',{x:mid.x,y:mid.y-8,'text-anchor':'middle','font-size':'12','font-weight':'600','fill':textColor},[document.createTextNode(`🌀${label}${suffix}`)]));
-          }
-        });
-        gSpecials.appendChild(portalLines);
-      }
-      const laneStartOffset=tileSize*0.65;
-      const centerClearance=isCompact?58:72;
-      const laneFor=(idx)=>{
-        if(typeof idx!=='number') return null;
-        const tile=geom.track[idx];
-        if(!tile) return null;
-        const vecToCenter={x:cx-tile.x,y:cy-tile.y};
-        const dist=Math.hypot(vecToCenter.x,vecToCenter.y)||1;
-        const ux=vecToCenter.x/dist;
-        const uy=vecToCenter.y/dist;
-        const start={x:tile.x+ux*laneStartOffset,y:tile.y+uy*laneStartOffset};
-        const end={x:cx-ux*centerClearance,y:cy-uy*centerClearance};
-        return{start,end,angle:Math.atan2(uy,ux)};
-      };
-      const lanes={
-        red:laneFor(entryIdx.red),
-        blue:laneFor(entryIdx.blue),
-        yellow:laneFor(entryIdx.yellow),
-        green:laneFor(entryIdx.green)
-      };
-      for(const [idx,col] of Object.entries(entryIndexByColor)){
-        const tile=geom.track[idx];
-        if(!tile) continue;
-        const {nx,ny}=normalFromAngle(tile.angle||0);
-        const tip={x:tile.x+nx*(tileSize*0.28),y:tile.y+ny*(tileSize*0.28)};
-        const baseCenter={x:tile.x-nx*(tileSize*0.34),y:tile.y-ny*(tileSize*0.34)};
-        const perp={x:-ny,y:nx}; const baseHalf=tileSize*0.24;
-        const p1={x:baseCenter.x+perp.x*baseHalf,y:baseCenter.y+perp.y*baseHalf};
-        const p2={x:baseCenter.x-perp.x*baseHalf,y:baseCenter.y-perp.y*baseHalf};
-        const laneHex=ensureColor(color(`--${col}`),'#38bdf8');
-        gSpecials.appendChild(el('polygon',{points:`${tip.x},${tip.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`,fill:withAlpha(laneHex,0.82)}));
-      }
-      const flights=window.GameRules.BOARD.special.flightPaths.edges; const flightGroup=el('g',{});
-      const bezierTangent=(t,p0,p1,p2)=>{ const mt=1-t; return{ x:2*mt*(p1.x-p0.x)+2*t*(p2.x-p1.x), y:2*mt*(p1.y-p0.y)+2*t*(p2.y-p1.y) }; };
-      for(const [ck,edges] of Object.entries(flights)){
-        const strokeColor=color(`--${ck}`);
-        for(const e of edges){
-          const p0=geom.track[e.from]; const p2=geom.track[e.to];
-          const mid={x:(p0.x+p2.x)/2,y:(p0.y+p2.y)/2};
-          const vec={x:p2.x-p0.x,y:p2.y-p0.y}; const segLen=Math.hypot(vec.x,vec.y)||1; const unit={x:vec.x/segLen,y:vec.y/segLen};
-          let normal={x:-unit.y,y:unit.x};
-          const midFromCenter={x:mid.x-cx,y:mid.y-cy};
-          if(normal.x*midFromCenter.x+normal.y*midFromCenter.y<0){ normal={x:-normal.x,y:-normal.y}; }
-          const k=0.32; const control={x:mid.x+normal.x*(segLen*k), y:mid.y+normal.y*(segLen*k)};
-          const path=el('path',{d:`M ${p0.x} ${p0.y} Q ${control.x} ${control.y} ${p2.x} ${p2.y}`,stroke:strokeColor,'stroke-width':4,fill:'none',opacity:.78,'stroke-linecap':'round'});
-          flightGroup.appendChild(path);
-          // Remove the arrowhead to keep the map visuals cleaner while retaining the flight path curve
-        }
-      }
-      gSpecials.appendChild(flightGroup);
-      const homeLen=window.GameRules.BOARD.homeLane.length; Object.entries(lanes).forEach(([col,lane])=>{
-        if(!lane) return;
-        const dir={x:lane.end.x-lane.start.x,y:lane.end.y-lane.start.y};
-        const len=Math.hypot(dir.x,dir.y)||1;
-        const ux=dir.x/len,uy=dir.y/len;
-        const step=(homeLen>1)?len/(homeLen-1):len;
-        const perp={x:-uy,y:ux};
-        geom.home[col]=[];
-        const laneHex=ensureColor(color(`--${col}`),'#38bdf8');
-        for(let i=0;i<homeLen;i++){
-          const dist=step*i;
-          const x=lane.start.x+ux*dist; const y=lane.start.y+uy*dist;
-          geom.home[col][i]={x,y};
-          const along=tileSize*0.5;
-          const halfWidth=tileSize*0.18;
-          const p1={x:x+perp.x*halfWidth+ux*along,y:y+perp.y*halfWidth+uy*along};
-          const p2={x:x-perp.x*halfWidth+ux*along,y:y-perp.y*halfWidth+uy*along};
-          const p3={x:x-perp.x*halfWidth-ux*along,y:y-perp.y*halfWidth-uy*along};
-          const p4={x:x+perp.x*halfWidth-ux*along,y:y+perp.y*halfWidth-uy*along};
-          const isGoal=i===homeLen-1;
-          const fill=isGoal?withAlpha(laneHex,0.85):'rgba(148,163,184,0.18)';
-          const stroke=isGoal?withAlpha(laneHex,0.85):withAlpha(laneHex,0.4);
-          gTiles.appendChild(el('polygon',{points:`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`,'stroke-width':2,'stroke-linejoin':'round',stroke,fill}));
-        }
-      });
-      const tileGridHex=ensureColor(color('--tile-grid'),'#1f2937');
-      if(gGrid){
-        gGrid.appendChild(el('rect',{x:cx-60,y:cy-60,width:120,height:120,transform:`rotate(45 ${cx} ${cy})`,fill:'#0f172a',stroke:tileGridHex,'stroke-width':2}));
-        gGrid.appendChild(el('circle',{cx,cy,r:r+150,fill:'none',stroke:'#000','stroke-width':140,opacity:.35}));
-      }
-      const accentHex=ensureColor(color('--accent'),'#38bdf8');
-      gSpecials.appendChild(el('polygon',{points:starPoints(cx,cy,70,28),fill:withAlpha(accentHex,0.16),stroke:accentHex,'stroke-width':2.4}));
-      const baseOffset=isCompact?300:350;
-      const baseSize=isCompact?150:180;
-      const slotOffset=isCompact?32:40;
-      const slotRadius=isCompact?18:22;
-      const baseDefs={red:{dx:-baseOffset,dy:-baseOffset},blue:{dx:baseOffset,dy:-baseOffset},yellow:{dx:baseOffset,dy:baseOffset},green:{dx:-baseOffset,dy:baseOffset}};
-      geom.baseRadius=baseSize/2;
-      const runwayLength=(window.GameRules && window.GameRules.BOARD && window.GameRules.BOARD.runwayLength)||4;
-      const runwayPaddingFromBase=14;
-      const runwayTileSize=26;
-      const gRunways=el('g',{class:'runway-layer','pointer-events':'none'});
-      for(const [col,{dx,dy}] of Object.entries(baseDefs)){
-        const group=el('g',{});
-        const x=cx+dx,y=cy+dy,w=baseSize,h=baseSize;
-        geom.baseCenters[col]={x,y};
-        geom.runwayEntry[col]=startIdx[col];
-        const baseHex=ensureColor(color(`--${col}`),'#38bdf8');
-        group.appendChild(el('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:isCompact?18:22,fill:withAlpha(baseHex,0.18),stroke:withAlpha(baseHex,0.6),'stroke-width':2}));
-        const slots=[];
-        for(let i=-1;i<=1;i+=2){
-          for(let j=-1;j<=1;j+=2){
-            const sx=x+i*slotOffset,sy=y+j*slotOffset;
-            const label=slots.length+1;
-            slots.push({x:sx,y:sy});
-            group.appendChild(el('circle',{cx:sx,cy:sy,r:slotRadius,fill:'rgba(255,255,255,.10)',stroke:withAlpha(baseHex,0.65),'stroke-width':2}));
-            group.appendChild(el('text',{x:sx,y:sy,'text-anchor':'middle','dominant-baseline':'central','font-size':12,'fill':withAlpha(baseHex,0.85),'font-weight':'600'},[document.createTextNode(String(label))]));
-          }
-        }
-        geom.bases[col]=slots;
-        const finishedSlotSpacing=18;
-        const finishedOffsets=[
-          {x:-finishedSlotSpacing,y:-finishedSlotSpacing},
-          {x: finishedSlotSpacing,y:-finishedSlotSpacing},
-          {x:-finishedSlotSpacing,y: finishedSlotSpacing},
-          {x: finishedSlotSpacing,y: finishedSlotSpacing}
-        ];
-        geom.finishedSlots[col]=finishedOffsets.map(offset=>({x:x+offset.x,y:y+offset.y}));
-        const startIndex=startIdx[col];
-        const startTile=typeof startIndex==='number'?geom.track[startIndex]:null;
-        const runwayTiles=[];
-        if(startTile){
-          const baseCenter={x,y};
-          const heading=Math.atan2(startTile.y-baseCenter.y,startTile.x-baseCenter.x);
-          const baseRadius=geom.baseRadius||24;
-          const firstOffsetDist=baseRadius+runwayPaddingFromBase;
-          const firstPoint={x:baseCenter.x+Math.cos(heading)*firstOffsetDist,y:baseCenter.y+Math.sin(heading)*firstOffsetDist};
-          const vectorToStart={x:startTile.x-firstPoint.x,y:startTile.y-firstPoint.y};
-          const segCount=Math.max(1,runwayLength-1);
-          for(let i=0;i<runwayLength;i++){
-            const t=(segCount===0)?1:(i/segCount);
-            const px=firstPoint.x+vectorToStart.x*t;
-            const py=firstPoint.y+vectorToStart.y*t;
-            runwayTiles.push({x:px,y:py,heading,slotIndex:i});
-          }
-        }
-        geom.runway[col]=runwayTiles;
-        runwayTiles.forEach(tile=>{
-          const deg=tile.heading*180/Math.PI;
-          const gTile=el('g',{transform:`translate(${tile.x},${tile.y}) rotate(${deg})`,'data-runway-col':col,'data-runway-slot':String(tile.slotIndex)});
-          const rect=el('rect',{x:-runwayTileSize/2,y:-runwayTileSize/2,width:runwayTileSize,height:runwayTileSize,rx:4,ry:4,class:`runway-tile runway-${col}`,'pointer-events':'none',stroke:withAlpha(baseHex,0.55)});
-          gTile.appendChild(rect);
-          gRunways.appendChild(gTile);
-        });
-        const hudStatic=this._hudLayers?.static;
-        if(hudStatic && runwayTiles.length>0){
-          const tip=runwayTiles[runwayTiles.length-1];
-          const heading=tip.heading;
-          const labelDistance=hudTrackOutset+runwayTileSize;
-          const lx=tip.x-Math.cos(heading)*labelDistance;
-          const ly=tip.y-Math.sin(heading)*labelDistance;
-          const textColor=withAlpha(baseHex,0.95);
-          hudStatic.appendChild(el('text',{x:lx,y:ly,'text-anchor':'middle','font-size':11,'font-weight':'700','fill':textColor},[document.createTextNode(`${markerSymbol(col)} START`)]));
-        }
-        if(gGrid) gGrid.appendChild(group);
-      }
-      gSpecials.appendChild(gRunways);
-      if(svg && this.$?.gHL) svg.appendChild(this.$.gHL);
-      if(svg && this.$?.gPieces) svg.appendChild(this.$.gPieces);
+      gSpecials.appendChild(paths);
+      if(svg&&this.$?.gHL)svg.appendChild(this.$.gHL);
+      if(svg&&this.$?.gPieces)svg.appendChild(this.$.gPieces);
       this.state.boardAudit=this.auditGeometry(geom);
       this.clearGhostPath();
       this.observePiecesLayer();
     },
     auditGeometry(geom){
-      const issues=[];
-      const track=Array.isArray(geom?.track)?geom.track:[];
-      const minSpacing=30;
-      for(let i=0;i<track.length;i++){
-        const a=track[i];
-        if(!a) continue;
-        for(let j=i+1;j<track.length;j++){
-          const b=track[j];
-          if(!b) continue;
-          const d=Math.hypot(a.x-b.x,a.y-b.y);
-          if(d<minSpacing){
-            issues.push(`幾何重疊：軌道 ${i} 與 ${j} 距離過近（${d.toFixed(1)}）`);
-            i=track.length;
-            break;
-          }
-        }
-      }
-      const home=geom?.home||{};
-      const laneEnds=Object.values(home).map((lane)=>Array.isArray(lane)?lane[lane.length-1]:null).filter(Boolean);
-      if(laneEnds.length>=2){
-        const center={x:500,y:500};
-        const distances=laneEnds.map((pt)=>Math.hypot(pt.x-center.x,pt.y-center.y));
-        const spread=Math.max(...distances)-Math.min(...distances);
-        if(spread>6){
-          issues.push(`入家終點離中心距離差異過大（最大差 ${spread.toFixed(1)}）`);
-        }
-      }
-      return {ok:issues.length===0,issues};
+      return window.BoardGeometry.validate(geom,window.GameRules.BOARD);
     },
     clearGhostPath(){
       const layer=this._hudLayers?.dynamic;
