@@ -9,23 +9,49 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: Run existing regression tests
-        run: node --test tests/*.test.cjs
-      - name: Collect review source
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Syntax, asset and unit regression checks
+        run: |
+          mkdir -p test-results
+          npm run check 2>&1 | tee test-results/static-checks.log
+          npm test 2>&1 | tee test-results/unit-tests.log
+          npm run build 2>&1 | tee test-results/build.log
+      - name: Install real-browser test dependencies
+        run: |
+          python -m pip install -r tests/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Chromium interactions, real persistence and twenty complete games
+        run: python tests/browser_regression.py 2>&1 | tee test-results/browser-tests.log
+      - name: Retain logs and actual browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flight-chess-review-source
-          path: |
-            *.html
-            *.js
-            *.md
-            LICENSE
-            tests/
-          retention-days: 7
+          name: flight-chess-test-evidence
+          path: test-results/
+          retention-days: 30
+      - name: Package tested static game
+        uses: actions/upload-artifact@v4
+        with:
+          name: flight-chess-playable
+          path: dist/
+          retention-days: 30

@@ -1,65 +1,38 @@
 # Rule Conflict Matrix
 
-This document records the **actual** conflict priority implemented in
-`skybound_flight_chess_interface.html` as of branch `work`.
+Actual priority in `src/rules.js` and `src/app.js` for Skybound 0.2.
 
-## 1) Conflict priorities (high → low)
+## Resolution order
 
-1. **Hard illegality while moving**
-   - Enemy blockade on path (`blocked-by-enemy-stack`) stops the move simulation.
-   - Exact-finish / home-lane constraints can also invalidate a move.
-2. **Landing special resolution order**
-   - `own-color-jump` → `flight` → `portal` → `power-up` → `trap`.
-3. **Capture resolution**
-   - Capture is checked after landing/special movement finalizes.
-   - Enemy blockade on destination blocks capture/move.
-   - Safe tile immunity then prevents capture if tile is safe.
-4. **Post-move effect application**
-   - `power-up` effects (extra roll / bonus move) and `trap` skip-turn are applied.
-5. **Turn transition**
-   - Extra turn from dice=6 or power-up keeps the current player.
-   - Otherwise `advanceTurn()` rotates and consumes pending skip-turn counters.
+1. Movement legality: enemy blockades, exact-entry restrictions and exact-finish constraints can invalidate a move.
+2. Landing specials: own-colour jump → flight → portal → power-up → trap.
+3. Final capture: check destination blockade, then safe-tile immunity and capture settings.
+4. Apply post-move effects: bonus roll/move and pending trap skip counters.
+5. Turn transition: an earned extra roll keeps the current player; otherwise rotate, excluding finished players and consuming scheduled skip counters.
 
----
+## Conflicts and boundary cases
 
-## 2) Specific conflict outcomes
+| Case | Result |
+| --- | --- |
+| Trap plus an extra roll | Take the earned roll immediately. Consume the trap penalty on that player's next scheduled turn in the rotation. |
+| Trap recovery | No additional even-dice recovery penalty is applied. |
+| Flight/portal versus trap | Check the final landing after special relocation, not the original intermediate square. |
+| Capture on a safe tile | No capture on any enabled start-safe tile or configured safe-list square. |
+| Enemy destination blockade | Illegal when blockade pass-through is disabled, even when normal or flight captures are disabled. The explicit portal bypass option is an exception. |
+| Portal cycling | Portal limit bounds hops; paired portals cannot create an infinite resolution loop. |
+| Own-colour jump | Resolve once within the ordered specials pass, not recursively around the whole board. |
+| Reaching home-entry track square | Costs one pip and does not enter the home lane for free. Moving from entry into home cell 0 costs the next pip. |
+| Exact-home-entry option | Entry is permitted only when one pip remains. |
+| Exact finish | Overshoots are invalid unless bounce-back is enabled. |
+| Six with no legal move | Earn another roll when enabled, unless the third-consecutive-six penalty already ended the turn. |
+| Finished players with pending trap counters | Finished players are excluded from active turn targeting. Their old counters have no effect. |
+| Restart/Undo/load/lobby during delayed work | Invalidate the old game epoch and cancel pending timers. Stale callbacks cannot update the new state. |
+| Settings dialog | Blocks game keyboard/pointer actions and pauses the turn countdown until closed. |
 
-### A. Trap vs extra turn
+## Presets
 
-- A player can earn an extra turn (rolling 6 or power-up `extra-roll`) and still gain
-  a `trap` skip-turn counter from the same move.
-- The extra turn is taken immediately.
-- The trap penalty is consumed on that player's **next scheduled turn in rotation**
-  (not during the immediate extra turn).
+Classic-style disables portal/power/trap specials but retains colour jumps and flights. Fast and custom can use specials. Family disables capture, jumps, flights and specials. These are Skybound presets, not a universal physical-board rules claim.
 
-### B. Flight / portal relocation vs trap check
+## Test coverage
 
-- Trap is evaluated at the end of special resolution, so flight/portal relocation can
-  change whether trap triggers.
-- The final track tile after jump/flight/portal/power-up is the tile used for trap check.
-
-### C. Capture vs safe tile
-
-- Even if capture conditions are otherwise met, no enemy pieces are captured on safe tiles
-  (`start` safe tiles and configured `safeTiles.list`).
-
-### D. Capture vs enemy blockade on destination
-
-- If destination has an enemy stack (`>=2`) and `blockadePassThrough` is disabled,
-  move/capture is blocked before normal capture outcome.
-
-### E. Trap skip-turn vs finished players
-
-- Finished players are excluded from active turn targeting.
-- Skip counters can still exist in state for completed players, but they are irrelevant
-  once the player is in `finishOrder` / `disabledColors`.
-
----
-
-## 3) Code references used for this matrix
-
-- `SPECIAL_RESOLUTION_ORDER` and special resolver loop.
-- Move simulation legality checks and capture resolver.
-- `applySpecialEffects()` skip-turn and power-up effects.
-- `applyMove()` extra-turn decision path.
-- `advanceTurn()` skip-turn consumption and finished-player filtering.
+`tests/rules.test.cjs` covers move/special legality and counting. `tests/browser_regression.py` covers applied effects, trap/extra-roll rotation, capture, restart/Undo, dialogs and completed games. See `docs/QA_REPORT.md` for the executed environment and results.
