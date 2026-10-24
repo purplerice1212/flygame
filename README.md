@@ -1,203 +1,96 @@
-# Skybound Flight Chess Interface Prototype（天際飛行棋介面原型）
+# Skybound Flight Chess · 天際飛行棋
 
-## Overview
-Skybound Flight Chess 是針對傳統飛行棋玩法打造的瀏覽器 MVP 介面原型。專案提供完整的大廳設定、棋盤顯示與回合導引，採用深色主題並內建無障礙語意結構，方便進一步擴充遊戲邏輯或整合框架。
+A local, single-browser Flight Chess game for 2–4 human/AI players. Version **0.2.0** replaces the oval layout with a canonical cross board while retaining the original dark visual language, colour palette, aircraft, special tiles, flight connections and controls.
 
-## Getting Started
-1. 直接以現代瀏覽器開啟 [`skybound_flight_chess_interface.html`](skybound_flight_chess_interface.html) 以預覽互動原型。
-2. 若需本地伺服器，可於專案根目錄執行 `npx serve .` 或任何靜態伺服器後造訪 `http://localhost:<port>/skybound_flight_chess_interface.html`。
-3. 後續若要加入模組化 JavaScript，可將目前的 `<script>` 拆分成獨立檔案並透過 bundler 或框架導入。
+## Play
 
-## Project Layout
-| Path | 說明 |
+Download the repository or the `flight-chess-playable` artifact from a successful **Validate Flight Chess** Actions run. Extract the entire folder and open `index.html` or `skybound_flight_chess_interface.html` in a modern browser. Keep `board-geometry.js`, `src/` and `styles/` alongside the HTML. The game has no remote font, API, login or runtime package dependency.
+
+For reliable browser storage and local development, serve the project with Python:
+
+```sh
+python -m http.server 8080
+```
+
+Then open `http://localhost:8080/`. Browser storage is scoped to the origin; changing ports, browsers or profiles does not transfer a save. Export JSON before moving a game to another device or browser.
+
+**操作：** 選擇 2–4 位玩家、顏色及規則，再按「開始遊戲」。先擲骰，再點飛機或右邊的移動按鈕。`Space` 擲骰、`1–4` 選棋、`U` 撤銷。設定內可切換主題、顯示棋格編號，以及匯出／匯入 JSON 存檔。
+
+## Board and presets
+
+The coordinate model has 52 unique clockwise track cells, four six-cell home lanes and four four-plane bases. The red, blue, yellow and green bases occupy the top-left, top-right, bottom-right and bottom-left quadrants respectively. Every sprite and movement path uses the same coordinate data.
+
+| Preset | Behaviour |
 | --- | --- |
-| `skybound_flight_chess_interface.html` | 含結構、樣式與遊戲邏輯的單檔原型。 |
-| `README.md` | 操作與架構說明（本文件）。 |
+| 經典 / Classic-style | Six to take off, no initial advance, third-six penalty; portals, traps and power tiles disabled. Colour jumps and flights retained. |
+| 速戰 / Fast | Five or six to take off, faster animations and overshoot bounce-back. |
+| 親子 / Family | Even-number takeoff, no captures/jumps/flights/special tiles and overshoot bounce-back. |
+| 自訂 / Custom | The original configurable Skybound variant. |
 
-## Key Features
-- **大廳／開局設定**：支援 2–4 位玩家、人機混合、顏色選擇與預設規則（經典、速戰、自訂）。
-- **自訂規則引擎**：提供細緻參數調校，包括起飛條件、連擲與懲罰、吃子／堵路、捷徑、特殊格、終點、動畫速度與回合計時。
-- **棋盤顯示**：以語意化 SVG 呈現標準路徑、捷徑、飛線、基地與家路，並對應特殊格圖示。
-- **操作列與狀態提示**：整合返回、設定、說明、擲骰、可行動棋子、戰報記錄、提示橫幅、提示卡片與 toast。
-- **主題切換與上一步回放**：支援深色／淺色／高對比主題即時切換，並在側邊欄顯示最近一步行動摘要與「重播上一步」路徑高亮。
-- **回合控制**：內建 Undo、重開局、暫停回合（亂流）、倒數計時與 AI 自動出手。
-- **無障礙考量**：語意化結構、ARIA 標籤與鍵盤操作提示，確保主要互動皆可使用鍵盤完成。
-- **AI 難度決策調校 / Difficulty-tailored AI**：AI 現在會依照難度改變保守程度、追趕策略與風險評估，提供由易到難的層次化挑戰。
+This is a documented **Skybound variant**, not a claim to reproduce every printed Flight Chess edition. Special resolution order and conflicting options are explained in [RULE_CONFLICT_MATRIX.md](RULE_CONFLICT_MATRIX.md).
 
-## 特殊格行為：亂流陷阱（Trap Tile）
-在預設棋盤上，索引為 12、25、38、51 的格子標記為陷阱（圖示 `⚠`）。當棋子停在這些格子上時會觸發以下流程：
+## What was repaired
 
-1. **特殊格解析順序**：`GameRules.resolveSpecialsAfterLanding` 依序處理自色跳格、飛線、傳送門、增益，最後才處理陷阱，確保棋子完成所有強制位移後才檢查陷阱效果。
-2. **事件記錄**：若落點為陷阱，該函式會在移動事件清單中加入 `{ type: 'trap', effect: 'skip-turn' }`，並將這個效果回傳給介面控制器。
-3. **UI 提示**：`App.applySpecialEffects` 讀取事件後，會在戰報與 toast 顯示「遭遇亂流，下一回合將停飛」等提示資訊。
-4. **回合懲罰**：同一函式會把陷阱效果累加到 `state.skipTurns`。當 `App.advanceTurn` 換手時，若當前玩家仍有未清零的 `skipTurns`，系統會自動跳過該玩家回合並同步提示。
+- Correct cross-grid geometry, centred aircraft, aligned tile faces and smaller arrows that do not cover special icons.
+- Correct home-entry pip counting and blockade legality, including games with captures disabled.
+- Trap penalties consume the next scheduled turn, not an immediately earned extra roll. There is no additional even-dice recovery penalty.
+- Fixed the AI exposure-helper initialisation crash, colour-specific threat calculations and duplicate/stale AI callbacks.
+- Restart, Undo, restore and return-to-lobby invalidate delayed actions so an old animation cannot change a new game.
+- Settings dialogs isolate keyboard input and pause the turn timer. Theme changes repaint the SVG board.
+- Versioned save validation, safe legacy import, JSON export/import and a warning when browser storage is unavailable.
 
-綜合以上流程，棋子停在陷阱格後會失去下一回合的操作權，而介面會提供即時且可追溯的視覺提示以協助玩家理解觸發原因。
+Easy, normal and hard remain locally evaluated heuristic opponents. Tests establish legal actions and completed games; they do not establish a measured competitive-strength ranking.
 
-## Additional Resources
-- **規則衝突矩陣 / Rule conflict matrix**：詳見 [`RULE_CONFLICT_MATRIX.md`](RULE_CONFLICT_MATRIX.md)，記錄目前實作中的優先序與衝突結果。
-- **設計稿／靜態資產**：若有 UI 設計稿，可放置於 `docs/` 或 `design/` 目錄，並於專案層級 `index.html` 連結對應資源。
-- **問題回報**：使用 GitHub Issues 或其他追蹤工具蒐集錯誤與功能需求，並以標籤區分「UI」「規則引擎」「AI」「可及性」。
-- **開發規範**：建議遵循 [Conventional Commits](https://www.conventionalcommits.org/) 為提交訊息命名，以利後續自動化釋出流程。
+## Architecture
 
-## Version & Persistence
-- 棋盤規格版本：`skybound-variant-v2`（`GameRules.BOARD.boardSpecVersion`）。
-- 儲存格式版本：`skybound-variant-v2`（常數 `SAVE_VERSION`）。
-- 本地存檔索引鍵：`ac_save_v1`（常數 `SAVE_KEY`）。
+| File | Responsibility |
+| --- | --- |
+| `board-geometry.js` | Canonical coordinate generation and geometry validation. |
+| `src/rules.js` | Pure board rules, move generation and special resolution; also importable by Node tests. |
+| `src/app.js` | UI, input, SVG renderer, timers, AI, animation and game lifecycle. |
+| `src/save-store.js` | Bounded, whitelisted JSON save validation and legacy normalisation. |
+| `styles/game.css` | Original visual language plus targeted responsive/accessibility repairs. |
+| `skybound_flight_chess_interface.html` | Game markup and local script imports. |
+| `scripts/` | Dependency-free static validation and distribution build. |
+| `tests/` | Node unit tests and real Chromium regression suite. |
 
-## JavaScript Architecture
-整個互動邏輯位於 HTML 檔案尾端的兩個立即執行模組：`GameRules`（規則引擎）與 `App`（介面控制器）。
+The original single-file architecture notes are preserved in [docs/ARCHITECTURE_LEGACY.md](docs/ARCHITECTURE_LEGACY.md) for historical reference only. Some function listings and roadmap items there predate this release.
 
-### GameRules 模組
-`GameRules` 暴露以下屬性與工具，用於計算合法移動與棋盤互動：
+## Run the checks
 
-- `BOARD`：定義棋盤規格、起點、家路、捷徑、傳送門、增益與陷阱。
-- `DEFAULT_RULES`：建議的初始規則組合，供 `App` 載入或覆寫。
-- `SPECIAL_RESOLUTION_ORDER`：特殊格結算順序常數（自色跳格 → 飛行 → 傳送門 → 增益 → 陷阱）。
-- `buildOccupancy(state)`：統計目前各格子上不同顏色棋子的占據情況。
-- `canTakeoffWith(dice, rules)`：判斷擲出的骰值是否符合起飛條件。
-- `isOwnJumpTile(color, idx)` / `flightTo(color, idx)` / `isStartTile(color, idx)` / `isAnyStartTile(idx)` / `isSafeTrackTile(color, idx, rules)`：棋盤輔助判斷函式。
-- `generateLegalMoves(state, rules, dice)`：計算目前回合所有可行動作與特殊事件。
-- `simulateMove(player, fromPos, dice, rules, occ)`：模擬單一棋子的移動結果、特殊格、吃子與結束情況。
-- `resolveSpecialsAfterLanding(player, pos, rules, occ, events)`：依結算順序處理捷徑、飛線、傳送門、增益與陷阱。
-- `resolveCaptureOnTrack(player, pos, rules, occ, context)`：處理落點吃子、堵路與安全格。
-- `Pos.base(slot)` / `Pos.track(idx)` / `Pos.home(idx)` / `Pos.finished()` / `Pos.isEqual(a, b)`：位置表示與比較工具。
+Node 22 or later and Python 3.12 are the CI reference environment. No `npm install` is needed for the game or unit tests.
 
-### App 介面控制器
-`App` 以 `state` 物件維護檢視狀態、玩家資料、規則、棋子位置、回合資訊、歷史紀錄與控制鎖定，並透過下列方法驅動整體介面：
+```sh
+npm run check
+npm test
+npm run build
+python -m pip install -r tests/requirements.txt
+python -m playwright install --with-deps chromium
+python tests/browser_regression.py
+```
 
-#### Bootstrapping & 事件綁定
-- `init()`：初始化應用，快取元素、綁定事件並建立預設棋盤。
-- `cache()`：快取常用 DOM 節點以便後續操作。
-- `hasSavedGame()`：檢查本地儲存是否存在存檔。
-- `bind()`：綁定大廳、按鈕、鍵盤等使用者互動事件。
+The build outputs a self-contained `dist/` folder. The browser suite starts its own loopback HTTP server and uses actual Chromium localStorage and native downloads. It tests 320, 390, 768 and 1440-pixel layouts, keyboard/mouse actions, AI, restart/Undo, captures, trap priority, victory and JSON export/import. It also runs twenty seeded AI-selected games to completion. Screenshots and results are written to `test-results/`.
 
-#### 檢視與提示管理
-- `updateViewVisibility()`：切換大廳與對局檢視的可見狀態。
-- `updateBoardOverlay()`：根據檢視與設定狀態顯示棋盤覆蓋提示。
-- `syncPlayerCardColor(card)` / `refreshPlayerCardColors()`：同步玩家卡片的顏色標籤。
-- `updateSpecialsLegend()`：更新特殊格圖例的啟用狀態呈現。
-- `onResize()`：節流處理視窗尺寸變更後的棋盤重繪。
-- `lockInput(ms)` / `isInputLocked()`：鎖定或檢查輸入，避免提示期間誤觸。
-- `showToast(message, duration)`：顯示暫時性的提示訊息。
-- `updateControlAssignments()`：根據設定與玩家偏好分配鍵盤／滑鼠控制權。
-- `currentPlayer()` / `currentControlModeForTurn()`：查詢目前回合玩家與控制方式。
-- `isInteractionPermitted(source)` / `handleBlockedInteraction(source)`：判斷輸入來源是否允許並在被阻擋時提示。
-- `renderHints()`：於提示卡片呈現當前玩家的操作建議。
-- `buildTurnPrompt()` / `showTurnPrompt(message, options)` / `updateTurnPrompt(force)`：生成並顯示回合橫幅訊息。
-- `log(message)`：寫入戰報記錄面板。
-- `getAnimDuration(base)`：依動畫速度設定調整動畫時間。
-- `clearTurnTimer()` / `beginTurnTimer()` / `handleTurnTimerExpired()`：管理回合倒數計時與逾時處理。
+`FLYCHESS_INLINE=1` is a restricted-environment fallback for visual/interaction checks. It explicitly skips the two hosted-storage/download tests. Normal CI does **not** use that mode.
 
-#### 遊戲流程與規則
-- `refreshLegalMoves()`：運用 `GameRules` 重新計算可行動作並處理增益限制。
-- `handleNoMoves(player)`：處理無棋可走時的提示與自動換手。
-- `updateTurnUI()`：更新回合指示、按鈕狀態、倒數計時與提示。
-- `cloneDefaultRules(extra)`：複製預設規則並合併覆寫選項。
-- `renderLobbyPlayers(n)`：依人數生成玩家設定卡片。
-- `applyPreset(name)`：套用預設規則組合（經典／速戰／自訂）。
-- `applyBoardDefaultsToRules()`：將棋盤定義中的安全格與特殊格預設合併進規則。
-- `readRulesFromForm()`：自大廳表單讀取自訂規則值。
-- `normalizePieces()`：確保每名玩家的棋子資料含有基礎欄位。
-- `normalizePlayerControls()`：整理玩家控制設定為有效值。
-- `startGame()`：收集玩家與規則設定、初始化棋子與狀態並進入對局。
-- `toGame()` / `toLobby()`：在對局與大廳檢視之間切換。
-- `restartGame()`：在保留玩家設定的情況下重置對局。
-- `rollDice(source)`：處理擲骰流程、亂流跳過與互動鎖定判斷。
-- `bootstrapBoard()`：依棋盤規格重建 SVG 結構與幾何資訊。
-- `highlightMovables()`：標示可移動棋子並更新右側選項。
-- `describeMove(move)`：生成移動摘要文字（含事件與增益）。
-- `posToXY(pos)`：將棋子位置映射為棋盤上的座標。
-- `redrawPieces()`：根據狀態重新繪製棋子圖層。
-- `applyMove(move, source)`：套用單一步驟的移動、處理吃子與動畫。
-- `applySpecialEffects({ player, move, leadIndex })`：解析並執行增益或陷阱效果。
-- `advanceTurn()`：依規則前進至下一位玩家、處理連擲與跳過。
-- `onKey(event)`：監聽鍵盤快捷鍵（擲骰、選棋、Undo 等）。
+See [docs/QA_REPORT.md](docs/QA_REPORT.md) for the verified candidate results and exact limitations. Every push/PR runs the permanent validation workflow; inspect the latest commit's result before merging.
 
-#### 存檔、歷史與 Undo
-- `snapshot()`：擷取當前狀態（玩家、棋子、規則與增益）。
-- `saveGame()`：將狀態寫入本地儲存並更新「繼續上局」按鈕。
-- `loadGame()`：由本地儲存讀取並解析存檔資料。
-- `clearSave()`：刪除現有存檔。
-- `continueFromSave(data)`：載入存檔並恢復棋局與介面。
-- `pushHistory()`：記錄可 Undo 的狀態快照（最多 20 筆）。
-- `undo()`：回復上一個歷史狀態並重繪棋盤。
+## Persistence and privacy
 
-#### AI 與自動化
-- `isAI(player)`：判斷玩家是否為 AI。
-- `chooseAIMove()`：評分目前可行動作並挑選 AI 最佳移動。
-- `maybeAutoPlayIfAI()`：於適當時機觸發 AI 自動擲骰與移動。
+Save key: `ac_save_v1`. Envelope and board version: `skybound-variant-v2`. Current envelopes and compatible bare legacy snapshots are validated before loading. Invalid saves are not silently deleted. Import rejects oversized input, unsafe prototype fields, invalid players, illegal positions and unsupported rule values.
 
-#### 動畫與威脅提示
-- `animatePiece(player, from, to, duration)`：以動畫呈現棋子的移動軌跡。
-- `pulseAt(x, y, color)`：於特定座標顯示脈衝效果。
-- `computeThreatFaces(targetIdx)`：計算敵方可能襲擊指定格子的骰面值。
-- `showThreatBadge(x, y, faces)`：顯示對應威脅骰值的提醒徽章。
+Data stays in the browser unless the player exports a file. It is ordinary JSON, not encryption or anti-cheat protection. There are no accounts, credentials, authentication tokens, server rankings or online multiplayer.
 
-## AI Difficulty Refinements（AI 難度決策優化）
+## Publishing
 
-### English
-- **Easy**：Prefers getting planes out of the base and staying on safer tiles, with extra randomness to keep the challenge relaxed.
-- **Normal**：Balances safety with steady progress, reacting more when trailing by prioritising catch-up moves and recovering from threats.
-- **Hard**：Evaluates exposure, blockades, and finishing tempo more deeply, rewarding captures and low-risk advances to pressure human players.
+A manual **Publish Flight Chess to Pages** workflow is included. Repository hosting must first be enabled in **Settings → Pages → Build and deployment → Source: GitHub Actions**. Then run that workflow on `main`; it reruns the checks before deploying `dist/`.
 
-### 繁體中文
-- **簡單**：偏好起飛與停留在安全格，並加入額外隨機性，營造輕鬆節奏。
-- **普通**：在安全與推進間取得平衡，落後時會更積極追趕並降低受威脅的機率。
-- **困難**：會進一步評估暴露度、堵路與終點節奏，優先吃子與低風險推進，對人類玩家形成壓力。
+Adding this workflow does not itself enable Pages or prove a live URL exists. Use the deployment URL shown by the successful workflow. The tested downloadable build works independently of hosting.
 
+## Known limits
 
-## Project Finish Roadmap（專案收尾路線圖）
-
-若目標是把目前 MVP 從「可玩原型」推進到「可交付版本」，建議分 5 個里程碑處理：
-
-1. **Stability / 穩定性**
-   - 把 `GameRules` 與 `App` 拆成獨立模組（`/src/rules`, `/src/app`），降低單檔維護成本。
-   - 補單元測試（至少覆蓋：起飛、吃子、堵路、特殊格順序、跳過回合）。
-   - 建立 smoke test（開局→擲骰→移動→存檔→讀檔）。
-
-2. **Game Completeness / 遊戲完整度**
-   - 補齊「勝利後流程」：結算頁、排行榜、再次開局。
-   - 檢查並統一所有規則衝突優先序（例如：連擲 vs 陷阱跳過）。
-   - 新增 3–5 組「規則範本」以方便一般玩家直接開局。
-
-3. **UX & Accessibility / 體驗與無障礙**
-   - 針對手機斷點優化控制區（擲骰、可行動列表、戰報）。
-   - 補齊鍵盤焦點順序與螢幕閱讀器描述（尤其是棋子可行動狀態）。
-   - 加入新手引導（首次進入時一步步教學）。
-
-4. **Persistence & Ops / 存檔與維運**
-   - 將存檔升級策略文件化（版本遷移對照表）。
-   - 新增匯出/匯入 JSON 存檔，避免只依賴 localStorage。
-   - 補上錯誤回報欄位（瀏覽器版本、規則配置、最近 10 筆戰報）。
-
-5. **Release / 發佈**
-   - 建立 CI（lint + test + build 靜態頁面檢查）。
-   - 撰寫 `CHANGELOG.md` 與 `LICENSE`。
-   - 發佈到 GitHub Pages / Netlify 並設定版本標記。
-
-## Definition of Done（完成定義）
-
-專案可視為「完成」的最低門檻：
-
-- 規則引擎測試覆蓋核心流程，且 CI 全綠。
-- 2–4 人局至少完成 20 場手動回歸，無阻斷級 bug。
-- 手機與桌機都能順暢操作（擲骰、選棋、Undo、存讀檔）。
-- README 含部署方式、版本資訊、已知限制與回報流程。
-- 有正式授權條款與發佈紀錄。
-
-## Suggested Next 3 Tasks（建議下一步）
-
-如果你要立刻推進，建議先做這三件：
-
-1. 把 `GameRules` 抽成模組並加測試（這一步能最快提升可維護性）。
-2. 定義一份「規則衝突矩陣」並逐項驗證目前實作。
-3. 上線一個公開試玩連結，收集前 10 位玩家回饋後再進入美術與音效優化。
-
-## Development Tips
-- 若需擴充邏輯，可將 `GameRules` 與 `App` 拆分為模組並補齊型別註記或測試。
-- 規則引擎使用 `structuredClone`（或 JSON 備援）複製狀態，可視瀏覽器支援情況調整。
-- 建議在新增特殊格或規則時，同步更新 `BOARD` 定義與相關 UI（例如特殊格圖例與提示文案）。
+Chromium automation and responsive viewport checks are complete for the recorded release candidate. Physical-device testing on iOS/Safari and Android, screen-reader usability testing, and live Pages deployment verification are not claimed. Very small board cells can be selected via the larger move buttons beside/below the board. The package remains a local game, not an authenticated network service.
 
 ## License
-目前尚未定義授權條款，可依需求新增 `LICENSE` 檔案。
+
+MIT. See [LICENSE](LICENSE) and [CHANGELOG.md](CHANGELOG.md).
