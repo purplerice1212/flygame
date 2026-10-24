@@ -58,7 +58,7 @@
       const startIdx=board?.track?.startIndex?.[color] ?? COLORS.indexOf(color)*13;
       runwayEntry[color]=startIdx;
       const start=track[startIdx];
-      runway[color]=[0.74,0.88].map(t=>({
+      runway[color]=[0.50,0.65].map(t=>({
         x:center.x+(start.x-center.x)*t,
         y:center.y+(start.y-center.y)*t
       }));
