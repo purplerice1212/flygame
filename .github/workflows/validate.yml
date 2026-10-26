@@ -15,7 +15,8 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Match the supported OS for the pinned Playwright browser/dependencies.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -39,7 +40,10 @@ jobs:
       - name: Install real-browser test dependencies
         run: |
           python -m pip install -r tests/requirements.txt
-          python -m playwright install --with-deps chromium
+          # Hosted Ubuntu 24.04 already has Chrome's runtime libraries.
+          # Keep pinned Chromium without redundant apt upgrades/mirror stalls.
+          python -m playwright install chromium
+          bash scripts/prepare-ci-fonts.sh | tee test-results/font-environment.log
       - name: Chromium interactions, real persistence and twenty complete games
         run: |
           python tests/browser_regression.py 2>&1 | tee test-results/browser-tests.log

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.1] - 2026-10-26
+
+### Fixed
+- Legal streaks of four or more sixes no longer break autosave or JSON export when the three-six penalty is disabled. Accumulated trap penalties also round-trip without an arbitrary cap.
+- Editing the next game's setup cannot overwrite a paused game's save or exported rules.
+- Imported games refresh their controls after the settings dialog closes, so restored moves remain clickable.
+- Turn countdowns stop during flight/capture animation. Expired bonus choices clear their state so the next player can roll. Very large skip counters no longer cause recursive turn processing.
+- Paired portals no longer immediately reverse with a two-hop limit. Takeoff uses same-colour blockades, requires the full configured advance and allows transit past allied aircraft when stacking is disabled.
+- Storage failures remain visible; duplicate-colour and invalid-import feedback appears in the active view/dialog. Shared-mode hints now describe touch, mouse and keyboard correctly.
+
+### Improved verification and usability
+- Compact move/hint panels and collapsible board reference preserve the original visual style while reducing scrolling.
+- Geometry regressions cover four-way rotation and 1,248 movement/coordinate cases. New lifecycle and save tests cover the repaired edge cases.
+- Browser regressions now run against the actual `dist/` package, including its entry page, real touch events, six-streak save/reload/export/import, animation deadlines, quota failures and paused-game isolation.
+- Pin validation and Pages runners to Ubuntu 24.04: `ubuntu-latest` moved to Ubuntu 26.04, which the pinned Playwright 1.57.0 dependency installer does not support.
+- Reuse hosted runners' existing browser libraries while still downloading pinned Chromium. A subsequent run spent 14 minutes 34 seconds downloading redundant Ubuntu dependencies and hit the job deadline before browser tests could start.
+- Add a verified, versioned CI-only Traditional Chinese font so actual browser screenshots retain legible Chinese text without full apt dependency installation.
+
 ## [0.2.0] - 2026-10-24
 
 ### Fixed

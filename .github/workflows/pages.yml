@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,9 @@ jobs:
           npm test
           npm run build
           python -m pip install -r tests/requirements.txt
-          python -m playwright install --with-deps chromium
+          # Reuse the hosted runner's browser libraries; download pinned Chromium.
+          python -m playwright install chromium
+          bash scripts/prepare-ci-fonts.sh
           npm run test:browser
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -41,7 +43,7 @@ jobs:
           path: dist
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       pages: write

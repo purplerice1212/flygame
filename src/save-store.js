@@ -11,7 +11,7 @@
   const fail=message=>{throw new Error(message);};
   const record=(o,label)=>o&&typeof o==='object'&&!Array.isArray(o)?o:fail(label+' 必須是物件');
   function integer(v,min,max,label){
-    if(!Number.isInteger(v)||v<min||v>max) fail(label+' 超出範圍');
+    if(!Number.isSafeInteger(v)||v<min||v>max) fail(label+' 超出範圍');
     return v;
   }
   function text(v,fallback,max=120){
@@ -100,6 +100,10 @@
     if(turn===null&&complete.size!==players.length) fail('對局未完結但沒有當前玩家');
     if(turn!==null&&complete.has(turn)) turn=players.find(p=>!complete.has(p.id))?.id??null;
     const settings=record(s.settings??{},'設定');
+    const normalizedRules=rules(s.rules,game.DEFAULT_RULES);
+    // Without the optional penalty, the engine may legitimately roll any number
+    // of consecutive sixes. Preserve that count through save/export and import.
+    const sixesLimit=normalizedRules.tripleSixPenalty?3:Number.MAX_SAFE_INTEGER;
     const counters=(key,max)=>Object.fromEntries(players.map(p=>[p.id,integer(s[key]?.[p.id]??0,0,max,key)]));
     let pendingBonus=null;
     if(s.pendingBonus!=null){
@@ -118,8 +122,10 @@
           captured:(Array.isArray(m.captured)?m.captured:[]).slice(0,12).map(c=>({color:choice(c.color,COLORS,'red','被吃子顏色')}))};
       }
     }
-    return {players,pieces,turn,rules:rules(s.rules,game.DEFAULT_RULES),dice:s.dice==null?null:integer(s.dice,1,6,'骰值'),
-      consecutiveSixes:counters('consecutiveSixes',3),skipTurns:counters('skipTurns',20),
+    return {players,pieces,turn,rules:normalizedRules,dice:s.dice==null?null:integer(s.dice,1,6,'骰值'),
+      consecutiveSixes:counters('consecutiveSixes',sixesLimit),
+      // Extra rolls can accumulate traps before the next scheduled turn.
+      skipTurns:counters('skipTurns',Number.MAX_SAFE_INTEGER),
       turbulenceRecoveries:Object.fromEntries(players.map(p=>[p.id,0])),
       bonusSelecting:bool(s.bonusSelecting,false)&&!!pendingBonus,pendingBonus,pendingExtraTurn:bool(s.pendingExtraTurn,false),
       settings:{keyboardMode:choice(settings.keyboardMode,['shared','dual','custom'],'shared','鍵盤模式'),theme:choice(settings.theme,['dark','light','high'],'dark','主題'),debugBoard:bool(settings.debugBoard,false)},

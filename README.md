@@ -1,6 +1,6 @@
 # Skybound Flight Chess · 天際飛行棋
 
-A local, single-browser Flight Chess game for 2–4 human/AI players. Version **0.2.0** replaces the oval layout with a canonical cross board while retaining the original dark visual language, colour palette, aircraft, special tiles, flight connections and controls.
+A local, single-browser Flight Chess game for 2–4 human/AI players. Version **0.2.1** repairs persistence, takeoff and turn-timer edge cases on the canonical cross board while retaining the original dark visual language, colour palette, aircraft, special tiles, flight connections and controls.
 
 ## Play
 
@@ -15,6 +15,8 @@ python -m http.server 8080
 Then open `http://localhost:8080/`. Browser storage is scoped to the origin; changing ports, browsers or profiles does not transfer a save. Export JSON before moving a game to another device or browser.
 
 **操作：** 選擇 2–4 位玩家、顏色及規則，再按「開始遊戲」。先擲骰，再點飛機或右邊的移動按鈕。`Space` 擲骰、`1–4` 選棋、`U` 撤銷。設定內可切換主題、顯示棋格編號，以及匯出／匯入 JSON 存檔。
+
+**一個人或親友同樂：** 一個人玩可將其他玩家設為 AI，選擇簡單、普通或困難。朋友可共用同一部電腦、平板或手機輪流操作。共享模式同時支援觸控、滑鼠及鍵盤；「親子」預設不吃子。「玩法與棋盤圖例」可隨時展開查看。
 
 ## Board and presets
 
@@ -38,6 +40,11 @@ This is a documented **Skybound variant**, not a claim to reproduce every printe
 - Restart, Undo, restore and return-to-lobby invalidate delayed actions so an old animation cannot change a new game.
 - Settings dialogs isolate keyboard input and pause the turn timer. Theme changes repaint the SVG board.
 - Versioned save validation, safe legacy import, JSON export/import and a warning when browser storage is unavailable.
+- Unrestricted legal six streaks and accumulated trap penalties survive save/export/import when the optional penalty is disabled. Invalid numeric counters remain rejected.
+- New-game setup changes in the lobby cannot overwrite the paused game's save or exported rules.
+- Countdown time stops during flight/capture animation; expired bonus choices release the next player. Large skip counters are processed without recursion.
+- Paired portals cannot immediately reverse; takeoff obeys the full advance distance and the same blockade definition as normal movement.
+- Visible storage status, visible lobby/import feedback and accurate touch/shared-control hints.
 
 Easy, normal and hard remain locally evaluated heuristic opponents. Tests establish legal actions and completed games; they do not establish a measured competitive-strength ranking.
 
@@ -58,7 +65,9 @@ The original single-file architecture notes are preserved in [docs/ARCHITECTURE_
 
 ## Run the checks
 
-Node 22 or later and Python 3.12 are the CI reference environment. No `npm install` is needed for the game or unit tests.
+Ubuntu 24.04, Node 22 and Python 3.12 are the CI reference environment. The OS is pinned to remain compatible with Playwright 1.57.0. Hosted CI reuses the runner's existing browser libraries and downloads the pinned Chromium binary, avoiding redundant apt upgrades. The local setup below installs system dependencies when needed. No `npm install` is needed for the game or unit tests.
+
+CI also installs a commit-pinned, SHA-256-verified Noto Sans CJK TC font for readable Chinese screenshots. Its SIL Open Font License is retained alongside the CI font. This font setup is not part of `dist/` and adds no runtime download to the game.
 
 ```sh
 npm run check
@@ -69,11 +78,13 @@ python -m playwright install --with-deps chromium
 python tests/browser_regression.py
 ```
 
-The build outputs a self-contained `dist/` folder. The browser suite starts its own loopback HTTP server and uses actual Chromium localStorage and native downloads. It tests 320, 390, 768 and 1440-pixel layouts, keyboard/mouse actions, AI, restart/Undo, captures, trap priority, victory and JSON export/import. It also runs twenty seeded AI-selected games to completion. Screenshots and results are written to `test-results/`.
+The build outputs a self-contained `dist/` folder. The browser suite serves that exact built folder over loopback HTTP and uses actual browser localStorage and native downloads. Run `npm run build` again after source changes. For source-only development, `FLYCHESS_GAME_ROOT=.` explicitly changes the served root.
 
-`FLYCHESS_INLINE=1` is a restricted-environment fallback for visual/interaction checks. It explicitly skips the two hosted-storage/download tests. Normal CI does **not** use that mode.
+The suite tests 320, 390, 768 and 1440-pixel layouts, keyboard/mouse/touch actions, AI, restart/Undo, captures, trap priority, victory, six-streak persistence, JSON export/import, storage-failure recovery and turn deadlines. It also runs twenty seeded AI-selected games to completion. Screenshots and results are written to `test-results/`. `CHROMIUM_PATH` can select an installed Chromium/Chrome executable when the pinned browser download is unavailable.
 
-See [docs/QA_REPORT.md](docs/QA_REPORT.md) for the verified candidate results and exact limitations. Every push/PR runs the permanent validation workflow; inspect the latest commit's result before merging.
+`FLYCHESS_INLINE=1` is a restricted-environment fallback for visual/interaction checks. It explicitly skips tests requiring hosted storage or native downloads. Normal CI does **not** use that mode.
+
+See [docs/QA_0.2.1.md](docs/QA_0.2.1.md) for the current repair verification and [docs/QA_REPORT.md](docs/QA_REPORT.md) for the earlier 0.2.0 candidate. Main pushes and all pull requests run the permanent validation workflow; inspect the latest commit's result before merging.
 
 ## Persistence and privacy
 
