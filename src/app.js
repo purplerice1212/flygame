@@ -141,7 +141,7 @@
       this.$={
         viewLobby:$('#view-lobby'), viewGame:$('#view-game'), playerCount:$('#playerCount'), playerList:$('#player-list'),
         formSetup:$('#form-setup'), btnQuick:$('#btn-quick'), btnStart:$('#btn-start'), btnLobby:$('#btn-lobby'), btnRoll:$('#btn-roll'),
-        diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'), hintCard:$('#hint-card'), turnBanner:$('#turn-banner'), toast:$('#toast-host'),
+        diceOut:$('#dice-output'), movables:$('#movables'), log:$('#log'), turn:$('#turn-indicator'), kbMode:$('#keyboard-mode'), timer:$('#timer'), hintCard:$('#hint-card'), turnBanner:$('#turn-banner'), toast:$('#toast-host'), saveStatus:$('#save-status'),
         btnUndo:$('#btn-undo'), btnRestart:$('#btn-restart'), btnContinue:$('#btn-continue'), svg:document.querySelector('svg.board'),
         gBack:$('#layer-background'), gGrid:$('#layer-grid'), gTiles:$('#layer-tiles'), gSpecials:$('#layer-specials'), gHud:$('#layer-hud'), gPieces:$('#layer-pieces'), gHL:$('#layer-highlights'),
         boardOverlay:$('#board-overlay'), specialsLegend:$('#specials-legend'), specialsStatus:document.querySelector('[data-specials-status]'), specialsOrder:$('#specials-order'), mapAuditStatus:$('#map-audit-status'), mapAuditErrors:$('#map-audit-errors'),
@@ -252,7 +252,12 @@
       $('#btn-import').addEventListener('click',()=>$('#save-import').click());
       $('#save-import').addEventListener('change',e=>{this.importSave(e.target.files?.[0]);e.target.value='';});
       $('#board-debug').addEventListener('change',e=>{this.state.settings.debugBoard=e.target.checked;this.bootstrapBoard();this.redrawPieces();});
-      document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',()=>this.maybeAutoPlayIfAI()));
+      document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',()=>{
+        // Imports and control changes can render choices while a modal blocks
+        // pointer input. Rebind them after it closes so the restored game plays.
+        if(this.state.view==='game'){this.highlightMovables();this.renderHints();}
+        this.maybeAutoPlayIfAI();
+      }));
       const settingsDialog=$('#dialog-settings');
       const aboutDialog=$('#dialog-about');
       const victoryDialog=this.$.dialogVictory;
@@ -458,8 +463,10 @@
     },
     isInputLocked(){ return Date.now()< (this.state.inputLockUntil||0); },
     showToast(message,duration=1600){
-      const host=this.$?.toast; if(!host) return;
-      if(!this._toast){ this._toast=document.createElement('div'); this._toast.className='toast-message'; host.appendChild(this._toast); }
+      const host=document.querySelector('dialog[open] .dialog-feedback') || (this.state.view==='lobby'?$('#lobby-feedback'):this.$?.toast);
+      if(!host) return;
+      if(!this._toast){ this._toast=document.createElement('div'); this._toast.className='toast-message'; }
+      if(this._toast.parentNode!==host) host.appendChild(this._toast);
       if(this._toastTimer){ clearTimeout(this._toastTimer); this._toastTimer=null; }
       if(!message){ this._toast.dataset.show='false'; this._toastTimer=setTimeout(()=>{ if(this._toast) this._toast.dataset.show='false'; },0); return; }
       this._toast.textContent=message;
@@ -535,7 +542,18 @@
       const moveCount=Array.isArray(this.state.legalMoves)?this.state.legalMoves.length:0;
       const mode=this.state.settings.keyboardMode||'shared';
       const playerIndex=this.state.players.findIndex(p=>p.id===player.id);
-      if(control==='keyboard'){
+      if(this.isAI(player)){
+        hints.push(stage==='roll'?'AI 正在準備擲骰…':'AI 正在選擇移動…');
+        hints.push('稍候便會自動完成回合');
+      }else if(mode==='shared'){
+        if(stage==='roll') hints.push('點擊「擲骰 🎲」或按 Space');
+        if(stage==='move') hints.push(moveCount>0?'點擊飛機／移動按鈕，或按 1–4 選棋':'沒有可移動棋子，等待換手');
+        if(stage==='bonus'){
+          hints.push(this.state.pendingBonus?.description||'選擇棋子完成增益');
+          hints.push(moveCount>0?'觸控、滑鼠或數字鍵皆可選棋':'沒有可用的增益移動，稍後自動結束');
+        }
+        if(this.state.rules?.undoEnabled) hints.push('可點 Undo 或按 U 撤銷');
+      }else if(control==='keyboard'){
         if(stage==='roll') hints.push('按 Space 擲骰 🎲');
         if(stage==='move' || stage==='bonus'){
           if(mode==='shared' || mode==='custom'){ hints.push('用 1–4 選棋'); }
@@ -559,7 +577,7 @@
       }else{
         if(stage==='roll') hints.push('點擊「擲骰 🎲」開始');
         if(stage==='move'){
-          if(moveCount>0) hints.push('點擊棋子或右側按鈕移動');
+          if(moveCount>0) hints.push('點擊棋子或移動按鈕移動');
           else hints.push('目前沒有可行動的棋子');
         }
         if(stage==='bonus'){
@@ -578,7 +596,7 @@
       const finishText=finishedCount>=totalPieces && finishIdx>=0 ? `完成 ${finishedCount}/${totalPieces} · 第 ${finishIdx+1} 名` : `完成 ${finishedCount}/${totalPieces}`;
       const meta=document.createElement('div');
       meta.className='hint-meta';
-      meta.textContent=`${control==='keyboard'?'此回合鎖定鍵盤操作':'此回合鎖定滑鼠操作'} · ${finishText}`;
+      meta.textContent=`${this.isAI(player)?'AI 自動操作':mode==='shared'?'觸控、滑鼠、鍵盤皆可':control==='keyboard'?'此回合鎖定鍵盤操作':'此回合鎖定滑鼠操作'} · ${finishText}`;
       host.appendChild(title);
       host.appendChild(list);
       host.appendChild(meta);
@@ -671,7 +689,11 @@
       const control=this.currentControlModeForTurn();
       const stage=this.state.bonusSelecting?'bonus':(this.state.dice==null?'roll':'move');
       let action='準備中';
-      if(stage==='roll') action = control==='keyboard' ? '按 Space 擲骰 🎲' : '點擊 🎲 擲骰';
+      if(this.isAI(player)){
+        action=stage==='roll'?'AI 準備擲骰':'AI 選擇移動';
+      }else if(this.state.settings.keyboardMode==='shared'){
+        action=stage==='roll'?'點擊 🎲 或按 Space 擲骰':stage==='bonus'?'選擇棋子完成增益':'點擊飛機／移動按鈕，或按 1–4';
+      }else if(stage==='roll') action = control==='keyboard' ? '按 Space 擲骰 🎲' : '點擊 🎲 擲骰';
       else if(stage==='move') action = control==='keyboard' ? '用數字鍵選棋' : '點擊棋子行動';
       else if(stage==='bonus') action = control==='keyboard' ? '用數字鍵觸發增益' : '選擇棋子完成增益';
       else action='等待下一步';
@@ -784,6 +806,7 @@
       tick();
     },
     handleTurnTimerExpired(){
+      if(this.state.view!=='game' || this.state.animating || document.querySelector('dialog[open]')) return;
       const player=this.currentPlayer();
       if(!player) return;
       const label=this.formatPlayerName(player,{includeDifficulty:true});
@@ -874,7 +897,7 @@
           this.$.turn.style.setProperty('--turn-indicator-accent','var(--accent)');
         }
       }
-      this.setButtonDisabled(this.$.btnRoll,!player||this.state.animating||this.state.dice!=null);
+      this.setButtonDisabled(this.$.btnRoll,!player||this.isAI(player)||this.state.animating||this.state.dice!=null);
       const canUndo=!!(this.state.rules?.undoEnabled && Array.isArray(this.state.history) && this.state.history.length>0);
       this.setButtonDisabled(this.$.btnUndo,!canUndo);
       this.$.diceOut.textContent=this.state.dice==null?'–':String(this.state.dice);
@@ -1148,6 +1171,8 @@
       this.updateSpecialsLegend();
     },
     toLobby(){
+      // Keep the paused game separate from edits to the next game's setup.
+      if(this.state.view==='game') this._suspendedSnapshot=this.snapshot();
       this.cancelPendingActions();
       this.state.view='lobby';
       this.updateViewVisibility();
@@ -2251,6 +2276,9 @@
       const movingPieces=movingIndices.map(idx=>({idx,piece:this.state.pieces[pid]?.[idx]})).filter(entry=>entry.piece);
       const leadEntry=movingPieces.find(entry=>entry.idx===move.pieceIndex) || movingPieces[0];
       if(!leadEntry){ this.state.animating=false; return; }
+      // The choice is complete. Animation time must not consume the player's
+      // countdown or advance to another player before this move commits.
+      this.clearTurnTimer();
       const piece=leadEntry.piece;
       const fromXY=this.posToXY(player.color,piece.pos,leadEntry.idx,piece);
       const toXY=this.posToXY(player.color,move.to,leadEntry.idx,piece)||fromXY;
@@ -2432,7 +2460,10 @@
             this.updateTurnPrompt(true);
             this.saveGame();
             const needsChoice=(pendingBonusRequest.autoResolve===false) || (this.state.legalMoves.length>1);
-            if(needsChoice) this.maybeAutoPlayIfAI();
+            if(needsChoice){
+              this.beginTurnTimer();
+              this.maybeAutoPlayIfAI();
+            }
             if(pendingBonusRequest.autoResolve!==false && this.state.legalMoves.length===1){
               const autoMove=this.state.legalMoves[0];
               this.runSoon(()=>this.applyMove(autoMove,'system'));
@@ -2525,16 +2556,38 @@
       const playersList=this.state.players||[];
       if(!Array.isArray(playersList) || playersList.length===0) return null;
       if(this._noMoveTimer){ clearTimeout(this._noMoveTimer); this._noMoveTimer=null; }
+      // A timed-out bonus belongs only to the departing turn. Leaving it set
+      // would prevent the next player from rolling at all.
+      this.state.bonusSelecting=false;
+      this.state.pendingBonus=null;
+      this.state.pendingExtraTurn=false;
       const prevId=this.state.turn;
       if(prevId!=null && this.state.consecutiveSixes){ this.state.consecutiveSixes[prevId]=0; }
       const total=playersList.length;
       this.state.finishOrder=this.state.finishOrder||[];
       this.state.disabledColors=this.state.disabledColors||{};
+      this.state.skipTurns=this.state.skipTurns||{};
+      const isFinished=player=>this.state.finishOrder.includes(player.id) || !!this.state.disabledColors[player.id];
+      const activePlayers=playersList.filter(player=>player && !isFinished(player));
+      // When every remaining player is suspended, all of these complete
+      // rotations contain only skips. Consume them in one bounded operation,
+      // then visit players once in the normal order. This is equivalent to
+      // repeated rotations even for large imported, valid skip counters.
+      const skippedRounds=activePlayers.length ? Math.min(...activePlayers.map(player=>Math.max(0,this.state.skipTurns[player.id]||0))) : 0;
+      if(skippedRounds>0){
+        for(const player of playersList){
+          if(!player) continue;
+          const consumed=Math.min(skippedRounds,Math.max(0,this.state.skipTurns[player.id]||0));
+          if(!consumed) continue;
+          this.state.skipTurns[player.id]-=consumed;
+          const label=this.formatPlayerName(player,{includeDifficulty:true});
+          this.log(`${label} 被亂流困住，跳過 ${consumed} 回合`,{color:player.color||null});
+        }
+      }
       const currentIdx=playersList.findIndex(p=>p.id===prevId);
       let idx=(currentIdx<0?0:(currentIdx+1)%total);
       let attempts=0;
       let target=null;
-      let skippedThisCycle=false;
       while(attempts<total){
         const candidate=playersList[idx];
         attempts++;
@@ -2543,27 +2596,17 @@
         const candidateId=candidate.id;
         const skipCount=Math.max(0,this.state.skipTurns?.[candidateId]||0);
         if(skipCount>0){
-          skippedThisCycle=true;
           this.state.skipTurns[candidateId]=skipCount-1;
           const candidateLabel=this.formatPlayerName(candidate,{includeDifficulty:true});
           this.log(`${candidateLabel} 被亂流困住，跳過此回合`,{color:candidate?.color||null});
           this.showToast(`${candidate.name} 暫停一回合`,1200);
           continue;
         }
-        const isFinished=this.state.finishOrder.includes(candidateId) || !!this.state.disabledColors[candidateId];
-        if(isFinished){ continue; }
+        if(isFinished(candidate)){ continue; }
         target=candidate;
         break;
       }
       if(!target){
-        const hasActivePlayers=playersList.some(p=>{
-          if(!p) return false;
-          const pid=p.id;
-          return !(this.state.finishOrder.includes(pid) || !!this.state.disabledColors[pid]);
-        });
-        if(skippedThisCycle && hasActivePlayers){
-          return this.advanceTurn();
-        }
         this.state.turn=null;
         this.state.dice=null;
         this.state.legalMoves=[];
@@ -2674,13 +2717,16 @@
       }));
     },
     saveGame(){
-      if(!Array.isArray(this.state.players) || this.state.players.length===0) return false;
+      if(this.state.view!=='game' || !Array.isArray(this.state.players) || this.state.players.length===0) return false;
       try{
         const payload=window.GameStorage.pack(this.snapshot(),window.GameRules);
         localStorage.setItem(SAVE_KEY,JSON.stringify(payload));
         this.setButtonDisabled(this.$?.btnContinue,false);
+        this._storageWarning=false;
+        if(this.$?.saveStatus){this.$.saveStatus.dataset.state='saved';this.$.saveStatus.textContent='已自動儲存在此瀏覽器';}
         return true;
       }catch(error){
+        if(this.$?.saveStatus){this.$.saveStatus.dataset.state='error';this.$.saveStatus.textContent='未能自動儲存。請在設定匯出存檔，保留目前進度。';}
         if(!this._storageWarning){this._storageWarning=true;this.showToast('未能自動儲存，請用設定內「匯出存檔」備份',3000);}
         return false;
       }
@@ -2696,12 +2742,15 @@
     },
     exportSave(){
       try{
-        const payload=window.GameStorage.pack(this.snapshot(),window.GameRules);
+        const snapshot=this.state.view==='game'?this.snapshot():this._suspendedSnapshot;
+        const payload=snapshot?window.GameStorage.pack(snapshot,window.GameRules):this.loadGame();
+        if(!payload) throw new Error('尚未有可匯出的對局');
         const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
         const url=URL.createObjectURL(blob),link=document.createElement('a');
         link.href=url;link.download='skybound-save-'+new Date().toISOString().slice(0,10)+'.json';
         link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-      }catch(error){this.showToast('未有可匯出的對局',2000);}
+        return true;
+      }catch(error){this.showToast('無法匯出：'+error.message,3000);return false;}
     },
     async importSave(file){
       if(!file) return false;

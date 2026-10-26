@@ -309,9 +309,10 @@
             }
             const destIdx = mod(rawDestIdx, BOARD.track.length);
             const tileOcc = occ.track[destIdx] || {};
-            const enemyCount = Object.entries(tileOcc).filter(([c,n])=>c!==player.color).reduce((a,[,n])=>a+n,0);
-            const allyCount = tileOcc[player.color]||0;
-            if(!(allyCount>0 && !rules.stackEnabled) && !(enemyCount>=2 && !rules.blockadePassThrough)){
+            // A blockade is two or more aircraft of one enemy colour. Different
+            // colours may share a safe start without forming a combined blockade.
+            const enemyBlockade = Object.entries(tileOcc).some(([c,n])=>c!==player.color && n>=2);
+            if(!(enemyBlockade && !rules.blockadePassThrough)){
               const events=[];
               const stepCount = Math.max(0, parseInt(rules.takeoffAdvanceSteps ?? 0, 10) || 0);
               let landingIdx = destIdx;
@@ -321,7 +322,9 @@
                 const nextOcc = occ.track[nextIdx] || {};
                 const enemyBlock = Object.entries(nextOcc).some(([c,n])=>c!==player.color && n>=2);
                 if(enemyBlock && !rules.blockadePassThrough){
-                  break;
+                  // The configured advance must be completed, just like an
+                  // ordinary move. Do not turn a blocked path into a shorter move.
+                  return;
                 }
                 landingIdx = nextIdx;
                 pathRecord.push(clone(Pos.track(landingIdx)));
@@ -496,7 +499,7 @@
       let portalCount=0;
       while(specialsActive && current.kind==='track'){
         const portal = portalLookup[current.idx];
-        if(!portal || portal.type!=='portal' || visitedPortals.has(current.idx) || portalCount>=portalLimit) break;
+        if(!portal || portal.type!=='portal' || visitedPortals.has(current.idx) || visitedPortals.has(portal.to) || portalCount>=portalLimit) break;
         if(portal.color && portal.color!==player.color) break;
         visitedPortals.add(current.idx);
         portalCount+=1;

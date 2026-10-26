@@ -1,6 +1,6 @@
 {
   "name": "skybound-flight-chess",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Local multiplayer Flight Chess with a canonical cross board and three AI levels",
   "engines": {"node": ">=22"},

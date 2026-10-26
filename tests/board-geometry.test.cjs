@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
 const Geometry=require('../board-geometry.js');
+const Rules=require('../src/rules.js');
 const board={track:{length:52,startIndex:{red:0,blue:13,yellow:26,green:39}},homeLane:{length:6,entryIndex:{red:50,blue:11,yellow:24,green:37}},bases:{perPlayer:4}};
 test('52 distinct cells and four rotated starts',()=>{
  const geom=Geometry.create(board);assert.equal(geom.track.length,52);assert.equal(new Set(geom.track.map(p=>p.row+':'+p.col)).size,52);
@@ -25,4 +26,36 @@ test('SVG anchor drift, overlapping cells and missing base positions are rejecte
  g=Geometry.create(board);g.home.red[0].x=g.track[0].x;g.home.red[0].y=g.track[0].y;assert.equal(Geometry.validate(g,board).ok,false);
  g=Geometry.create(board);g.baseCenters.red=null;assert.equal(Geometry.validate(g,board).ok,false);
  g=Geometry.create(board);g.bases.red[0].x=999;assert.equal(Geometry.validate(g,board).ok,false);
+});
+test('all colours share the same clockwise route and inward home geometry after rotation',()=>{
+ const geom=Geometry.create(Rules.BOARD),rotate=p=>({x:1000-p.y,y:p.x});
+ const same=(a,b)=>{assert.equal(a.x,b.x);assert.equal(a.y,b.y);};
+ for(let i=0;i<52;i++)same(rotate(geom.track[i]),geom.track[(i+13)%52]);
+ for(let c=0;c<4;c++){
+  const color=Geometry.COLORS[c],next=Geometry.COLORS[(c+1)%4];
+  same(rotate(geom.baseCenters[color]),geom.baseCenters[next]);
+  geom.home[color].forEach((p,i)=>same(rotate(p),geom.home[next][i]));
+ }
+ // The signed area distinguishes a continuous clockwise route from its reversal.
+ const twiceArea=geom.track.reduce((sum,p,i)=>{const n=geom.track[(i+1)%52];return sum+p.x*n.y-n.x*p.y;},0);
+ assert.ok(twiceArea>0);
+});
+test('every plain movement path agrees with adjacent rendered cells, including home entry',()=>{
+ const geom=Geometry.create(Rules.BOARD),rules=structuredClone(Rules.DEFAULT_RULES);
+ rules.ownColorJump.enabled=false;rules.dashedFlight.enabled=false;rules.specials.enabled=false;
+ const point=(color,pos)=>pos.kind==='track'?geom.track[pos.idx]:geom.home[color][pos.idx];
+ for(const color of Geometry.COLORS){
+  const player={id:'P1',color},state={players:[player],pieces:{P1:[]}};
+  const occ=Rules.buildOccupancy(state);
+  for(let index=0;index<52;index++)for(let dice=1;dice<=6;dice++){
+   const from=Rules.Pos.track(index),move=Rules.simulateMove(player,from,dice,rules,occ,{recordPath:true});
+   assert.equal(move.legal,true,`${color} ${index} +${dice}`);
+   const route=[from,...move.path.filter(pos=>pos.kind!=='finished')];
+   assert.equal(route.length,dice+1);
+   for(let i=1;i<route.length;i++){
+    const a=point(color,route[i-1]),b=point(color,route[i]),distance=Math.hypot(a.x-b.x,a.y-b.y);
+    assert.ok(Math.abs(distance-Geometry.CELL)<0.001||Math.abs(distance-Geometry.CELL*Math.SQRT2)<0.001,`${color} ${index} +${dice} pip ${i}`);
+   }
+  }
+ }
 });

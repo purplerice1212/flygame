@@ -12,7 +12,7 @@
   <header class="container app-bar" role="banner">
     <div class="row" aria-label="brand">
       <strong>✈️ 飛行棋</strong>
-      <span class="muted">Skybound · 0.2</span>
+      <span class="muted">Skybound · 0.2.1</span>
     </div>
     <nav aria-label="全局導覽">
       <ul class="nav-list">
@@ -31,7 +31,7 @@
       <div class="card">
         <form id="form-setup" aria-describedby="setup-help">
           <p id="setup-help" class="muted">選擇玩家、顏色、規則。按「開始遊戲」。</p>
-          <details class="quick-guide"><summary>第一次玩？快速上手</summary><p>先擲骰，再點飛機或右邊的移動按鈕。鍵盤可用 Space 擲骰、1–4 選棋、U 撤銷。四架飛機到達中央家路終點便完成；對局會自動儲存，設定內可匯出備份。</p></details>
+          <details class="quick-guide"><summary>第一次玩？快速上手</summary><p>先擲骰，再點飛機或移動按鈕。手機直接觸控；鍵盤可用 Space 擲骰、1–4 選棋、U 撤銷。四架飛機到達中央家路終點便完成；對局會自動儲存，設定內可匯出備份。想一個人玩，可把其他玩家的類型改為 AI。</p></details>
 
           <fieldset>
             <legend>玩家</legend>
@@ -126,13 +126,14 @@
                       <option value="fast">快</option>
                     </select>
                   </label>
-                  <label>回合計時（秒）<input type="number" name="turnTimerSec" min="0" value="0"></label>
+                  <label>回合計時（秒）<input type="number" name="turnTimerSec" min="0" max="3600" value="0"></label>
                   <label><input type="checkbox" name="undoEnabled" checked> 允許 Undo</label>
                 </fieldset>
               </div>
             </details>
           </fieldset>
 
+          <div id="lobby-feedback" class="feedback-host" role="status" aria-live="polite"></div>
           <div class="row" style="margin-top:12px">
             <button type="submit" class="btn" id="btn-start">開始遊戲</button>
             <button type="button" class="btn" id="btn-quick">快速開始（經典）</button>
@@ -166,6 +167,7 @@
           <strong id="turn-indicator">當前：—</strong>
           <span id="timer" class="muted" aria-live="polite"></span>
         </header>
+        <p id="save-status" class="save-status" role="status" aria-live="polite">對局會自動儲存在此瀏覽器</p>
         <div class="row" style="margin-top:8px">
           <button class="btn" id="btn-roll" type="button" aria-label="擲骰" aria-keyshortcuts="Space">擲骰 🎲</button>
           <output id="dice-output" aria-live="polite" class="pill" role="status">–</output>
@@ -193,6 +195,8 @@
           <button class="btn" id="btn-undo" type="button">Undo</button>
           <button class="btn" id="btn-restart" type="button">重開局</button>
         </div>
+        <details class="panel-section reference-panel">
+          <summary>玩法與棋盤圖例</summary>
         <section id="color-key" aria-label="顏色圖例" class="panel-section">
           <h3 class="section-title">起點圖例</h3>
           <ul class="color-key-list">
@@ -227,6 +231,7 @@
           <p class="muted audit-status">地圖檢查：<span id="map-audit-status">未檢查</span></p>
           <ul id="map-audit-errors" class="audit-errors" hidden></ul>
         </section>
+        </details>
       </aside>
     </section>
   </main>
@@ -237,13 +242,14 @@
       <h3 id="dialog-settings-title" class="section-title">設定</h3>
       <label>鍵盤控制
         <select id="keyboard-mode">
-          <option value="shared" selected>共享模式：1–4 選棋、Space 擲骰</option>
+          <option value="shared" selected>共享：觸控／滑鼠／鍵盤皆可</option>
           <option value="dual">雙人熱座：P1=1–4、P2=7–0</option>
           <option value="custom">自訂：依玩家卡片設定</option>
         </select>
       </label>
       <label><input id="board-debug" type="checkbox"> 顯示棋格編號／座標中心</label>
       <div class="row save-controls"><button class="btn" id="btn-export" type="button">匯出存檔</button><button class="btn" id="btn-import" type="button">匯入存檔</button><input id="save-import" type="file" accept="application/json,.json" hidden aria-label="選擇存檔 JSON"></div>
+      <div class="dialog-feedback feedback-host" role="status" aria-live="polite"></div>
       <label>主題
         <select id="theme">
           <option value="dark" selected>深色</option>

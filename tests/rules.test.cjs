@@ -29,6 +29,36 @@ test('takeoff follows start then advance positions for every colour',()=>{
  const s=state(4);
  for(const p of s.players){s.turn=p.id;const m=moves(s,6)[0];assert.equal(m.kind,'takeoff');assert.equal(m.path[0].idx,R.BOARD.track.startIndex[p.color]);assert.equal(m.to.idx,R.BOARD.track.startIndex[p.color]+1);}
 });
+test('different enemy colours sharing a safe start do not form a blockade',()=>{
+ const s=state(3),r=plain({takeoffAdvanceSteps:0});
+ s.pieces.P2[0].pos=s.pieces.P3[0].pos=R.Pos.track(0);
+ const ms=moves(s,6,r);assert.equal(ms.length,4);
+ for(const m of ms){assert.deepEqual(m.to,R.Pos.track(0));assert.deepEqual(m.capture.captured,[]);}
+ s.pieces.P2[1].pos=R.Pos.track(0);assert.equal(moves(s,6,r).length,0);
+});
+test('takeoff cannot stop early when its configured advance meets a blockade',()=>{
+ const s=state(4),r=plain({takeoffAdvanceSteps:3});
+ for(const player of s.players){
+  s.turn=player.id;
+  const enemy=s.players.find(p=>p.id!==player.id),start=R.BOARD.track.startIndex[player.color];
+  for(const offset of [0,1,2,3]){
+   s.pieces[enemy.id][0].pos=s.pieces[enemy.id][1].pos=R.Pos.track((start+offset)%52);
+   assert.equal(moves(s,6,r).length,0,`${player.color} blockade at offset ${offset}`);
+   const allowed=moves(s,6,{...r,blockadePassThrough:true});assert.equal(allowed.length,4);
+   assert.ok(allowed.every(m=>m.path.length===4&&m.to.idx===(start+3)%52));
+  }
+  s.pieces[enemy.id][0].pos=R.Pos.base(0);s.pieces[enemy.id][1].pos=R.Pos.base(1);
+ }
+});
+test('disabled stacking permits takeoff transit past an ally but forbids an occupied destination',()=>{
+ const s=state(),r=plain({stackEnabled:false,takeoffAdvanceSteps:1});
+ s.pieces.P1[0].pos=R.Pos.track(0);
+ const launches=moves(s,6,r).filter(m=>m.kind==='takeoff');
+ assert.equal(launches.length,3);assert.ok(launches.every(m=>m.to.idx===1));
+ assert.equal(moves(s,6,{...r,takeoffAdvanceSteps:0}).filter(m=>m.kind==='takeoff').length,0);
+ s.pieces.P1[0].pos=R.Pos.track(1);
+ assert.equal(moves(s,6,r).filter(m=>m.kind==='takeoff').length,0);
+});
 test('one pip advances one square; reaching home entry does not teleport',()=>{
  const s=state(4);
  for(const p of s.players){
@@ -83,6 +113,17 @@ test('jumping onto a blockade is illegal when flight capture is disabled',()=>{
 test('portal hops are bounded, and turning specials off prevents teleportation',()=>{
  const s=state();s.pieces.P1[0].pos=R.Pos.track(6);const r=plain();r.specials.enabled=true;
  const m=moves(s,1,r)[0];assert.equal(m.to.idx,33);assert.equal(m.events.filter(e=>e.type==='portal').length,1);assert.equal(moves(s,1)[0].to.idx,7);
+});
+test('a paired portal never reverses its own hop when two hops are allowed',()=>{
+ const s=state(),r=plain();r.specials.enabled=true;r.specials.portalLimit=2;
+ for(const portal of R.BOARD.special.portals){
+  s.pieces.P1[0].pos=R.Pos.track((portal.from+51)%52);
+  const m=moves(s,1,r)[0];
+  assert.equal(m.to.idx,portal.to);assert.deepEqual(m.path.map(p=>p.idx),[portal.from,portal.to]);
+  assert.equal(m.events.filter(e=>e.type==='portal').length,1);
+ }
+ r.specials.portalLimit=0;s.pieces.P1[0].pos=R.Pos.track(6);
+ assert.equal(moves(s,1,r)[0].to.idx,7);
 });
 test('portal bypass setting controls enemy destination blockade',()=>{
  const s=state();s.pieces.P1[0].pos=R.Pos.track(6);s.pieces.P2[0].pos=s.pieces.P2[1].pos=R.Pos.track(33);
