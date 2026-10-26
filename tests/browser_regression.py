@@ -286,4 +286,44 @@ class BrowserRegression(unittest.TestCase):
         self.assertEqual(self.page.evaluate('App.snapshot()'),before)
         self.page.screenshot(path=str(OUT/'import-feedback.png'),full_page=True)
 
+
+    def test_24_turn_instruction_does_not_shift_board_or_scroll(self):
+        self.start()
+        measure="""() => {
+          const board=document.querySelector('.board-wrap').getBoundingClientRect();
+          const panel=document.querySelector('#view-game aside').getBoundingClientRect();
+          return {
+            boardTop:board.top, boardHeight:board.height,
+            panelTop:panel.top, pageHeight:document.documentElement.scrollHeight,
+            scrollTop:window.scrollY
+          };
+        }"""
+        message='🛫 下一位玩家：請按 Space 擲骰，再選擇飛機移動。即使這個提示換行，棋盤也應保持原位。'
+        for width,height in [(1440,900),(768,900),(390,844),(320,640)]:
+            with self.subTest(width=width):
+                self.page.set_viewport_size({'width':width,'height':height})
+                self.page.clock.run_for(350)
+                self.page.evaluate("App.showTurnPrompt('')")
+                before=self.page.evaluate(measure)
+                self.page.evaluate("(text)=>App.showTurnPrompt(text,{duration:900,force:true})",message)
+                banner=self.page.locator('#turn-banner')
+                self.assertTrue(banner.is_visible())
+                self.assertEqual(self.page.evaluate("getComputedStyle(document.querySelector('#turn-banner')).position"),'fixed')
+                self.assertEqual(self.page.evaluate("getComputedStyle(document.querySelector('#turn-banner')).pointerEvents"),'none')
+                rect=banner.bounding_box()
+                self.assertGreaterEqual(rect['x'],-1)
+                self.assertGreaterEqual(rect['y'],-1)
+                self.assertLessEqual(rect['x']+rect['width'],width+1)
+                self.assertLessEqual(rect['y']+rect['height'],height+1)
+                during=self.page.evaluate(measure)
+                for key in before:
+                    self.assertAlmostEqual(during[key],before[key],places=2,msg=f'{width}px: {key} moved when prompt appeared')
+                if width in (1440,390):
+                    self.page.screenshot(path=str(OUT/f'turn-prompt-{width}.png'))
+                self.page.clock.run_for(1300)
+                self.assertTrue(banner.is_hidden())
+                after=self.page.evaluate(measure)
+                for key in before:
+                    self.assertAlmostEqual(after[key],before[key],places=2,msg=f'{width}px: {key} moved when prompt disappeared')
+
 if __name__=='__main__':unittest.main(verbosity=2)
