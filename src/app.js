@@ -303,9 +303,17 @@
     },
     updateViewVisibility(){
       const view=this.state.view||'lobby';
+      const changed=document.body.dataset.view!==view;
       document.body.dataset.view=view;
       if(this.$?.viewLobby) this.$.viewLobby.hidden = (view!=='lobby');
       if(this.$?.viewGame) this.$.viewGame.hidden = (view!=='game');
+      // The start button is low down in a long lobby. Without resetting scroll,
+      // switching to the shorter game view can leave the entire board above the
+      // viewport (especially on phones). Let layout settle before a second reset.
+      if(changed && typeof window.scrollTo==='function'){
+        window.scrollTo(0,0);
+        this.runSoon(()=>window.scrollTo(0,0));
+      }
     },
     updateBoardOverlay(){
       const overlay=this.$?.boardOverlay; if(!overlay) return;
