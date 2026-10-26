@@ -104,7 +104,7 @@
     input[type="text"], select{background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:10px;padding:8px}
     body[data-theme="light"] input[type="text"], body[data-theme="light"] select{background:#e2e8f0;color:#0f172a;border-color:#cbd5f5}
     body[data-theme="high"] input[type="text"], body[data-theme="high"] select{background:#0f172a;color:#f8fafc;border-color:#38bdf8}
-    #turn-banner{position:sticky;top:16px;z-index:20;display:block;padding:10px 18px;border-radius:999px;background:var(--turn-accent-soft,rgba(34,211,238,0.2));color:var(--turn-accent-ink,#0f172a);font-weight:600;border:1px solid var(--turn-accent-border,rgba(34,211,238,0.45));box-shadow:0 10px 20px rgba(15,23,42,0.35);max-width:fit-content;margin:0 auto 12px auto;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .22s ease,color .18s ease,background .18s ease,border-color .18s ease}
+    #turn-banner{position:relative;top:auto;z-index:20;display:block;padding:10px 18px;border-radius:999px;background:var(--turn-accent-soft,rgba(34,211,238,0.2));color:var(--turn-accent-ink,#0f172a);font-weight:600;border:1px solid var(--turn-accent-border,rgba(34,211,238,0.45));box-shadow:0 10px 20px rgba(15,23,42,0.35);max-width:fit-content;margin:0 auto 12px auto;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .22s ease,color .18s ease,background .18s ease,border-color .18s ease}
     #turn-banner[data-color]{color:var(--turn-accent,var(--accent));text-shadow:0 1px 2px rgba(2,6,23,0.45)}
     #turn-banner[data-show="true"]{opacity:1;transform:translateY(0)}
     body[data-theme="light"] #turn-banner{background:var(--turn-accent-soft,rgba(56,189,248,0.18));color:var(--turn-accent-ink,#0f172a);border-color:var(--turn-accent-border,rgba(56,189,248,0.45));box-shadow:0 8px 18px rgba(148,163,184,0.35)}
@@ -229,6 +229,6 @@
       #movables .btn{font-size:.95rem;min-height:48px}#hint-card{min-height:0}
       #view-game aside .log{height:130px}#view-game{gap:12px}.board-wrap{border-radius:12px}
       .preset-card{min-width:130px;flex:1}label{flex-wrap:wrap}fieldset{min-width:0}
-      #turn-banner{font-size:.88rem;top:4px;padding:8px 12px}
+      #turn-banner{font-size:.88rem;padding:8px 12px}
     }
     @media(prefers-reduced-motion:reduce){.confetti-piece{animation:none}.plane-token{transition:none}.winner-celebration{transition:none}}
