@@ -65,7 +65,7 @@ The original single-file architecture notes are preserved in [docs/ARCHITECTURE_
 
 ## Run the checks
 
-Node 22 or later and Python 3.12 are the CI reference environment. No `npm install` is needed for the game or unit tests.
+Ubuntu 24.04, Node 22 and Python 3.12 are the CI reference environment. The OS is pinned to remain compatible with Playwright 1.57.0. No `npm install` is needed for the game or unit tests.
 
 ```sh
 npm run check

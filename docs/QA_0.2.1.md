@@ -52,7 +52,9 @@ The final browser suite served the actual `dist/` folder, not the source tree. N
 | Responsive layout | 320, 390, 768 and 1440-pixel widths checked |
 | Static distribution build | Passed; entry page and assets exercised from `dist/` |
 
-Local environment: Node 24.22.1, Python 3.12, Playwright 1.57.0 and Google Chrome 156.0.8078.47. The pinned Chromium CDN archive was unavailable locally, so `CHROMIUM_PATH=/usr/bin/google-chrome` selected the installed Chrome browser. GitHub Actions retains its Node 22/Python 3.12/pinned Chromium environment and reruns the suite for the repair PR before merge.
+Local environment: Node 24.22.1, Python 3.12, Playwright 1.57.0 and Google Chrome 156.0.8078.47. The pinned Chromium CDN archive was unavailable locally, so `CHROMIUM_PATH=/usr/bin/google-chrome` selected the installed Chrome browser. GitHub Actions uses Ubuntu 24.04, Node 22, Python 3.12 and pinned Chromium, and reruns the suite for the repair PR before merge.
+
+The [first repair CI run](https://github.com/purplerice1212/flygame/actions/runs/40347215279) passed all 58 Node tests and the build, then failed during browser dependency installation. Its actual runner was Ubuntu 26.04.1 via `ubuntu-latest`; Playwright 1.57.0 reported that OS unsupported. Both validation and Pages workflows now explicitly use Ubuntu 24.04. Browser tests remain mandatory, and no failure is ignored.
 
 ```sh
 npm run check

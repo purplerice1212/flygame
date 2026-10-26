@@ -14,6 +14,7 @@
 - Compact move/hint panels and collapsible board reference preserve the original visual style while reducing scrolling.
 - Geometry regressions cover four-way rotation and 1,248 movement/coordinate cases. New lifecycle and save tests cover the repaired edge cases.
 - Browser regressions now run against the actual `dist/` package, including its entry page, real touch events, six-streak save/reload/export/import, animation deadlines, quota failures and paused-game isolation.
+- Pin validation and Pages runners to Ubuntu 24.04: `ubuntu-latest` moved to Ubuntu 26.04, which the pinned Playwright 1.57.0 dependency installer does not support.
 
 ## [0.2.0] - 2026-10-24
 
