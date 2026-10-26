@@ -35,6 +35,7 @@ jobs:
           python -m pip install -r tests/requirements.txt
           # Reuse the hosted runner's browser libraries; download pinned Chromium.
           python -m playwright install chromium
+          bash scripts/prepare-ci-fonts.sh
           npm run test:browser
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

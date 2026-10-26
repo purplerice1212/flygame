@@ -67,6 +67,8 @@ The original single-file architecture notes are preserved in [docs/ARCHITECTURE_
 
 Ubuntu 24.04, Node 22 and Python 3.12 are the CI reference environment. The OS is pinned to remain compatible with Playwright 1.57.0. Hosted CI reuses the runner's existing browser libraries and downloads the pinned Chromium binary, avoiding redundant apt upgrades. The local setup below installs system dependencies when needed. No `npm install` is needed for the game or unit tests.
 
+CI also installs a commit-pinned, SHA-256-verified Noto Sans CJK TC font for readable Chinese screenshots. Its SIL Open Font License is retained alongside the CI font. This font setup is not part of `dist/` and adds no runtime download to the game.
+
 ```sh
 npm run check
 npm test

@@ -16,6 +16,7 @@
 - Browser regressions now run against the actual `dist/` package, including its entry page, real touch events, six-streak save/reload/export/import, animation deadlines, quota failures and paused-game isolation.
 - Pin validation and Pages runners to Ubuntu 24.04: `ubuntu-latest` moved to Ubuntu 26.04, which the pinned Playwright 1.57.0 dependency installer does not support.
 - Reuse hosted runners' existing browser libraries while still downloading pinned Chromium. A subsequent run spent 14 minutes 34 seconds downloading redundant Ubuntu dependencies and hit the job deadline before browser tests could start.
+- Add a verified, versioned CI-only Traditional Chinese font so actual browser screenshots retain legible Chinese text without full apt dependency installation.
 
 ## [0.2.0] - 2026-10-24
 

@@ -58,6 +58,8 @@ The [first repair CI run](https://github.com/purplerice1212/flygame/actions/runs
 
 The [next run](https://github.com/purplerice1212/flygame/actions/runs/40347518341) passed the same static/unit/build checks, but reached the 15-minute job deadline before browser tests. Its actual apt log reported 21.4 MB downloaded in 14 minutes 34 seconds, with retries from `azure.archive.ubuntu.com`; Python dependencies and the subsequent Chromium downloads completed quickly. Hosted workflows now reuse the Ubuntu 24.04 image's existing browser runtime libraries and call `playwright install chromium` without `--with-deps`. This keeps the pinned Chromium binary and every browser assertion. It does not claim that the timed-out run passed browser tests. Local setup can still install dependencies as shown below.
 
+[The following run](https://github.com/purplerice1212/flygame/actions/runs/40350389797) passed 58 Node tests, all 25 browser tests and the 20 complete games, but manual inspection of its downloaded screenshots found missing Chinese glyphs in the minimal runner image. Hosted workflows now run `scripts/prepare-ci-fonts.sh` before browser tests. It downloads Noto Sans CJK TC from upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78` (Sans 2.004), checks SHA-256, retains the SIL Open Font License and verifies Fontconfig resolves the font. The font stays in the runner's user font directory, outside the playable build. The final PR check reruns the unchanged tests and supplies readable screenshot evidence.
+
 ```sh
 npm run check
 npm test
