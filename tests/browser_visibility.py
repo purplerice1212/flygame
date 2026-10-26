@@ -35,4 +35,22 @@ class VisibilityRegression(unittest.TestCase):
         self.assertFalse(first.locator('[data-difficulty-row]').is_visible())
         self.assertFalse(self.page.locator('#save-import').is_visible())
 
+    def test_navigation_keeps_board_visible_and_prompt_out_of_board(self):
+        for width in (320,390,768,1440):
+            with self.subTest(width=width):
+                self.page.set_viewport_size({'width':width,'height':844})
+                self.fixture.start()
+                self.assertEqual(self.page.evaluate('window.scrollY'),0)
+                board=self.page.locator('.board-wrap').bounding_box()
+                self.assertGreaterEqual(board['y'],0)
+                self.assertLess(board['y'],240)
+                banner=self.page.locator('#turn-banner')
+                if banner.is_visible():
+                    prompt=banner.bounding_box()
+                    self.assertLessEqual(prompt['y']+prompt['height'],board['y']+1)
+                self.page.evaluate('window.scrollTo(0,document.body.scrollHeight)')
+                self.page.evaluate('App.toLobby()')
+                self.page.clock.fast_forward(80)
+                self.assertEqual(self.page.evaluate('window.scrollY'),0)
+
 if __name__=='__main__':unittest.main(verbosity=2)
