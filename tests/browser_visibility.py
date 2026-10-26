@@ -44,10 +44,9 @@ class VisibilityRegression(unittest.TestCase):
                 board=self.page.locator('.board-wrap').bounding_box()
                 self.assertGreaterEqual(board['y'],0)
                 self.assertLess(board['y'],240)
-                banner=self.page.locator('#turn-banner')
-                if banner.is_visible():
-                    prompt=banner.bounding_box()
-                    self.assertLessEqual(prompt['y']+prompt['height'],board['y']+1)
+                # The independently released fixed turn popup must not block input.
+                self.assertEqual(self.page.evaluate(
+                    "getComputedStyle(document.querySelector('#turn-banner')).pointerEvents"),'none')
                 self.page.evaluate('window.scrollTo(0,document.body.scrollHeight)')
                 self.page.evaluate('App.toLobby()')
                 self.page.clock.fast_forward(80)
