@@ -56,6 +56,8 @@ Local environment: Node 24.22.1, Python 3.12, Playwright 1.57.0 and Google Chrom
 
 The [first repair CI run](https://github.com/purplerice1212/flygame/actions/runs/40347215279) passed all 58 Node tests and the build, then failed during browser dependency installation. Its actual runner was Ubuntu 26.04.1 via `ubuntu-latest`; Playwright 1.57.0 reported that OS unsupported. Both validation and Pages workflows now explicitly use Ubuntu 24.04. Browser tests remain mandatory, and no failure is ignored.
 
+The [next run](https://github.com/purplerice1212/flygame/actions/runs/40347518341) passed the same static/unit/build checks, but reached the 15-minute job deadline before browser tests. Its actual apt log reported 21.4 MB downloaded in 14 minutes 34 seconds, with retries from `azure.archive.ubuntu.com`; Python dependencies and the subsequent Chromium downloads completed quickly. Hosted workflows now reuse the Ubuntu 24.04 image's existing browser runtime libraries and call `playwright install chromium` without `--with-deps`. This keeps the pinned Chromium binary and every browser assertion. It does not claim that the timed-out run passed browser tests. Local setup can still install dependencies as shown below.
+
 ```sh
 npm run check
 npm test

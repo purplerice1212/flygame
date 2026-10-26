@@ -65,7 +65,7 @@ The original single-file architecture notes are preserved in [docs/ARCHITECTURE_
 
 ## Run the checks
 
-Ubuntu 24.04, Node 22 and Python 3.12 are the CI reference environment. The OS is pinned to remain compatible with Playwright 1.57.0. No `npm install` is needed for the game or unit tests.
+Ubuntu 24.04, Node 22 and Python 3.12 are the CI reference environment. The OS is pinned to remain compatible with Playwright 1.57.0. Hosted CI reuses the runner's existing browser libraries and downloads the pinned Chromium binary, avoiding redundant apt upgrades. The local setup below installs system dependencies when needed. No `npm install` is needed for the game or unit tests.
 
 ```sh
 npm run check

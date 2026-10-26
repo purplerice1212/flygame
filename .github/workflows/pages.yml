@@ -33,7 +33,8 @@ jobs:
           npm test
           npm run build
           python -m pip install -r tests/requirements.txt
-          python -m playwright install --with-deps chromium
+          # Reuse the hosted runner's browser libraries; download pinned Chromium.
+          python -m playwright install chromium
           npm run test:browser
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
